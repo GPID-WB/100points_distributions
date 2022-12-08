@@ -1,4 +1,4 @@
-source("renv/activate.R")
+# source("renv/activate.R")
 
 gca <- function(x, ...) {
   gert::git_commit_all(x, ...)

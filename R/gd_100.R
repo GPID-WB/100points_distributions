@@ -1,4 +1,172 @@
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# project:       Create 100-point distribution for group data
+# Author:        Andres Castaneda
+# Dependencies:  The World Bank
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Creation Date:    2022-12-06
+# Modification Date:
+# Script version:    01
+# References:
+#
+#
+# Output:             data.table with distribution
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#                   Load Libraries   ---------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+library(data.table)
+library(dtplyr)
+library(tidyverse)
+library(here)
 library(wbpip)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#                   Subfunctions   ---------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+rename_data_level_var <- function(dt,
+                                  verbose = TRUE) {
+
+#   ____________________________________________________
+#   Defenses                                        ####
+  stopifnot( exprs = {
+      is.data.frame(dt)
+    }
+  )
+
+  if (is.data.table(dt)) {
+    df <- copy(dt)
+  } else {
+    df <- as.data.table(dt)
+  }
+
+  vars <- names(df)
+
+  dl_var <- grep("data_level", vars, value = TRUE)
+
+
+#   ____________________________________________________
+#   Early returns                                   ####
+  ldl <- length(dl_var)
+  if (ldl == 0) {
+    if (verbose)
+      cli::cli_alert_warning("no {.code data_level} variable found")
+
+    return(dt)
+  } else if (ldl > 1) {
+    if (verbose)
+      cli::cli_alert_warning("Found {ldl} {.code data_level} variable{?s}: {.field {dl_var}}.
+                           Rename only works when one variable is found")
+    return(dt)
+  }
+
+#   ____________________________________________________
+#   Computations                                     ####
+  setnames(df, dl_var, "data_level")
+  df[, data_level := tolower(data_level)]
+
+
+#   ____________________________________________________
+#   Return                                           ####
+  return(df)
+
+}
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#                   Initial parameters   ---------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ppp_year <- py <- 2017
+nq       <- 10
+lorenz   <- NULL
+popshare <- seq(from = 1/nq, to = 1, by = 1/nq)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# load Aux data   ---------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+pfw <- pipload::pip_load_aux("pfw") |>
+  rename_data_level_var()
+
+gdm <- pipload::pip_load_aux("gdm") |>
+  rename_data_level_var()
+
+
+
+cpi <- pipload::pip_load_aux("cpi") |>
+  rename_data_level_var()
+
+cpi_var <- paste0("cpi", ppp_year)
+cpi[, cpi := get(cpi_var)]
+
+
+ppp <- pipload::pip_load_aux("ppp") |>
+  {\(.) .[ppp_year == py &
+            ppp_default_by_year  == TRUE]}() |>
+  rename_data_level_var()
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## Id  variables --------
+
+pfw_id <-
+  c("country_code",
+     "year",
+     "reporting_year",
+     "surveyid_year",
+     "survey_year",
+     "welfare_type",
+    "survey_acronym")
+
+cpi_id <-
+  c("country_code",
+    "survey_year",
+    "cpi_year",
+    "data_level",
+    "survey_acronym")
+
+
+gdm_id <-
+  c("country_code",
+    "data_level",
+    "survey_year",
+    "welfare_type")
+
+ppp_id <- c("country_code", "data_level")
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Merge aux data   ---------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+by_cpi_ppp     <- intersect(ppp_id, cpi_id)
+
+by_cpi_ppp_gdm <-
+  c(ppp_id, cpi_id) |>
+  unique() |>
+  intersect(gdm_id)
+
+by_cpi_ppp_ggm_pfw <-
+  c(cpi_id, ppp_id, gdm_id) |>
+  unique() |>
+  intersect(pfw_id)
+
+aux <-
+  merge(x = cpi,
+        y = ppp,
+        by = by_cpi_ppp) |>
+  merge(gdm,
+        by = by_cpi_ppp_gdm)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#                      ---------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#                      ---------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 
 pfw <- pipload::pip_load_aux("pfw") |>
   {\(.) .[use_groupdata == 1]}()
@@ -9,11 +177,6 @@ cpi <- pipload::pip_load_aux("cpi")
 
 ppp <- pipload::pip_load_aux("ppp")
 
-# INit parameters
-ppp_year <- 2017
-nq       <- 10
-lorenz   <- NULL
-popshare <- seq(from = 1/nq, to = 1, by = 1/nq)
 
 
 get_mean_ppp <- function(ppp_year) {
@@ -49,8 +212,8 @@ get_mean_ppp <- function(ppp_year) {
     id := paste(country_code, surveyid_year, welfare_type, sep = "_")
   ]
 
-  ft <- dt[!is.na(mean_ppp) # keep no na data
-  ][, # keep important variables
+  ft <- dt[!is.na(mean_ppp) ][,  # keep no na data
+    # keep important variables
     c("id", "mean_ppp", "pop_data_level")
   ] |>
     # create list of means and reporting level by id
