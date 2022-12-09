@@ -17,245 +17,16 @@
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 library(data.table)
-library(dtplyr)
-library(tidyverse)
-library(here)
 library(wbpip)
 
+# pipfun::pipinstall("pipfun", "ongoing", dependencies = FALSE)
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #                   Subfunctions   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-rename_data_level_var <- function(dt,
-                                  verbose = TRUE) {
-
-#   ____________________________________________________
-#   Defenses                                        ####
-  stopifnot( exprs = {
-      is.data.frame(dt)
-    }
-  )
-
-  if (is.data.table(dt)) {
-    df <- copy(dt)
-  } else {
-    df <- as.data.table(dt)
-  }
-
-  vars <- names(df)
-
-  dl_var <- grep("data_level", vars, value = TRUE)
-
-
-#   ____________________________________________________
-#   Early returns                                   ####
-  ldl <- length(dl_var)
-  if (ldl == 0) {
-    if (verbose)
-      cli::cli_alert_warning("no {.code data_level} variable found")
-
-    return(dt)
-  } else if (ldl > 1) {
-    if (verbose)
-      cli::cli_alert_warning("Found {ldl} {.code data_level} variable{?s}: {.field {dl_var}}.
-                           Rename only works when one variable is found")
-    return(dt)
-  }
-
-#   ____________________________________________________
-#   Computations                                     ####
-  setnames(df, dl_var, "data_level")
-  df[, data_level := tolower(data_level)]
-
-
-#   ____________________________________________________
-#   Return                                           ####
-  return(df)
-
-}
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#                   Initial parameters   ---------
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-ppp_year <- py <- 2017
-nq       <- 10
-lorenz   <- NULL
-popshare <- seq(from = 1/nq, to = 1, by = 1/nq)
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# load Aux data   ---------
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-
-pfw <- pipload::pip_load_aux("pfw") |>
-  rename_data_level_var()
-
-gdm <- pipload::pip_load_aux("gdm") |>
-  rename_data_level_var()
-
-
-
-cpi <- pipload::pip_load_aux("cpi") |>
-  rename_data_level_var()
-
-cpi_var <- paste0("cpi", ppp_year)
-cpi[, cpi := get(cpi_var)]
-
-
-ppp <- pipload::pip_load_aux("ppp") |>
-  {\(.) .[ppp_year == py &
-            ppp_default_by_year  == TRUE]}() |>
-  rename_data_level_var()
-
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-## Id  variables --------
-
-pfw_id <-
-  c("country_code",
-     "year",
-     "reporting_year",
-     "surveyid_year",
-     "survey_year",
-     "welfare_type",
-    "survey_acronym")
-
-cpi_id <-
-  c("country_code",
-    "survey_year",
-    "cpi_year",
-    "data_level",
-    "survey_acronym")
-
-
-gdm_id <-
-  c("country_code",
-    "data_level",
-    "survey_year",
-    "welfare_type")
-
-ppp_id <- c("country_code", "data_level")
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# Merge aux data   ---------
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-by_cpi_ppp     <- intersect(ppp_id, cpi_id)
-
-by_cpi_ppp_gdm <-
-  c(ppp_id, cpi_id) |>
-  unique() |>
-  intersect(gdm_id)
-
-by_cpi_ppp_ggm_pfw <-
-  c(cpi_id, ppp_id, gdm_id) |>
-  unique() |>
-  intersect(pfw_id)
-
-aux <-
-  merge(x = cpi,
-        y = ppp,
-        by = by_cpi_ppp) |>
-  merge(gdm,
-        by = by_cpi_ppp_gdm)
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#                      ---------
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#                      ---------
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-
-pfw <- pipload::pip_load_aux("pfw") |>
-  {\(.) .[use_groupdata == 1]}()
-
-gdm <- pipload::pip_load_aux("gdm")
-
-cpi <- pipload::pip_load_aux("cpi")
-
-ppp <- pipload::pip_load_aux("ppp")
-
-
-
-get_mean_ppp <- function(ppp_year) {
-  gdm <- pipload::pip_load_aux("gdm")
-  cpid <- pipload::pip_load_aux("cpi")
-
-
-  py <- ppp_year # to avoid issues with var name in pppd
-  pppd <- pipload::pip_load_aux("ppp")  |>
-    {\(.) .[ppp_year == py &
-              ppp_default_by_year  == TRUE]}()
-
-
-  dt <-
-    merge(gdm, cpid,
-          by.x =  c("country_code", "survey_year", "pop_data_level"),
-          by.y =  c("country_code", "survey_year", "cpi_data_level")
-    ) |>
-    merge(pppd,
-          by.x = c("country_code", "pop_data_level"),
-          by.y = c("country_code", "ppp_data_level"))
-
-  cpi_var <- paste0("cpi", ppp_year)
-
-  dt[, cpi := get(cpi_var)
-  ][, mean_ppp :=  {
-    x <- deflate_welfare_mean(survey_mean_lcu,
-                              ppp,
-                              cpi)
-    x <- x/(365/12)
-  }
-  ][,
-    id := paste(country_code, surveyid_year, welfare_type, sep = "_")
-  ]
-
-  ft <- dt[!is.na(mean_ppp) ][,  # keep no na data
-    # keep important variables
-    c("id", "mean_ppp", "pop_data_level")
-  ] |>
-    # create list of means and reporting level by id
-    split(by = "id",
-          keep.by = FALSE) |>
-    # convert data.table into vectors of means with reporting levels as names
-    purrr::map(~{
-      y        <- .x[, mean_ppp]
-      names(y) <- .x[, pop_data_level]
-      attr(y,"label") <- NULL
-      y
-    })
-
-  return(ft)
-}
-
-
-mean_ppp <- get_mean_ppp(ppp_year)
-# mean_ppp <- purrr::pmap(lf, get_mean_ppp)
-# mean_ppp <- mean_ppp[[1]]
-
-fpf <- pfw[, .(country_code,
-               year,
-               surveyid_year,
-               reporting_year,
-               survey_year,
-               pop_domain,
-               welfare_type
-)]
-
-fpf[,
-    id := paste(country_code, surveyid_year, welfare_type, sep = "_")
-]
-
-# fpf <- fpf[1:5]
-
-lf <- as.list(fpf)
-
-
-get_vctrs <- function(...) {
+gd_pop_wlf <- function(pl) {
   # pl <- as.list(environment())
-  pl <- list(...)
+  # pl <- list(...)
   dt   <- pipload::pip_load_cache(pl$country_code,
                                   pl$surveyid_year,
                                   verbose = FALSE)
@@ -285,12 +56,8 @@ get_vctrs <- function(...) {
               population = population))
 }
 
-vctrs <- purrr::pmap(lf, get_vctrs)
 
-names(vctrs) <- fpf[, id]
-# ww <- ww[[1]]
-
-get_calcs <- function(level, vctr, mean, id) {
+get_gd_calcs <- function(level, vctr, mean, id) {
 
   welfare    <- vctr$welfare[[level]]
   population <- vctr$population[[level]]
@@ -332,8 +99,109 @@ get_calcs <- function(level, vctr, mean, id) {
   return(dt)
 }
 
-poss_get_calcs <- purrr::possibly(.f = get_calcs,
-                                  otherwise = NULL)
+poss_get_gd_calcs <- purrr::possibly(.f = get_gd_calcs,
+                                     otherwise = NULL)
+
+fmt_sve <- function(dt) {
+  dt <- copy(dt)
+  nvars <- c("country_code", "year", "welfare_type")
+  id    <- unique(dt[, id])
+  dt[,
+     (nvars) := tstrsplit(id, split = "_")
+  ][, id := NULL]
+
+  # save
+  haven::write_dta(dt, fs::path("data/singles", id, ext = "dta"))
+  qs::qsave(dt, fs::path("data/singles", id, ext = "qs"))
+
+}
+
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#                   Initial parameters   ---------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ppp_year <- py <- 2017
+nq       <- 100
+lorenz   <- NULL
+popshare <- seq(from = 1/nq, to = 1, by = 1/nq)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# load Aux data   ---------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+aux <- pipfun::pip_merge_aux(c("cpi", "ppp", "gdm"))
+
+pfw <- pipload::pip_load_aux("pfw") |>
+  {\(.) .[use_groupdata == 1 &
+            inpovcal  == 1]}()
+
+aux_id <- attr(aux, "id")
+pfw_id <- pipfun::aux_ids("pfw")$pfw
+
+byv <- intersect(aux_id, pfw_id)
+
+# filter according to pfw
+dt <- merge(aux, pfw, byv)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# deflate mean   ---------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+dt[, mean_ppp :=  {
+      x <- deflate_welfare_mean(survey_mean_lcu,
+                                ppp,
+                                cpi)
+      x <- x/(365/12)
+    }
+   ][,
+      id := paste(country_code, surveyid_year, welfare_type, sep = "_")
+    ]
+
+mean_ppp <-
+  dt[!is.na(mean_ppp)
+  ][,  # keep no na data
+    # keep important variables
+    c("id", "mean_ppp", "data_level")
+  ] |>
+  # create list of means and reporting level by id
+  split(by = "id",
+        keep.by = FALSE) |>
+  # convert data.table into vectors of means with reporting levels as names
+  purrr::map(~{
+    y        <- .x[, mean_ppp]
+    names(y) <- .x[, data_level]
+    attr(y,"label") <- NULL
+    y
+  })
+
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Get population and welfare vctrs for Group data   ---------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+fpf <- pfw[, .(country_code,
+               year,
+               surveyid_year,
+               reporting_year,
+               survey_year,
+               pop_domain,
+               welfare_type)]
+
+fpf[,
+    id := paste(country_code, surveyid_year, welfare_type, sep = "_")
+]
+
+# fpf <- fpf[1:5]
+# lf <- as.list(fpf)
+pl <- split(fpf, by = "id")
+
+vctrs <- purrr::map(pl, gd_pop_wlf)
+names(vctrs) <- fpf[, id]
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Get distributions   ---------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 rd <-
   purrr::map(.x = names(vctrs),
@@ -344,7 +212,7 @@ rd <-
 
                levels <- names(y)
                purrr::map_df(.x = levels,
-                             .f = poss_get_calcs,
+                             .f = poss_get_gd_calcs,
                              vctr = v,
                              mean = y,
                              id   = id)
@@ -359,18 +227,11 @@ rd_err
 
 # Get rid of problematic data
 rd <- purrr::compact(rd)
-rd <- rbindlist(rd, use.names = TRUE)
 
-nvars <- c("country_code", "year", "welfare_type")
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# format and save data   ---------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-rd[, (nvars) := tstrsplit(id, split = "_")
-][, id := NULL]
+purrr::walk(rd, fmt_sve)
 
-if ("tdirp" %in% ls()) {
-  dir <-
-    fs::path_dir(tdirp) |>
-    fs::path("stata")
-
-  haven::write_dta(rd, fs::path(dir, "gd_10points.dta"))
-
-}
+# rd <- rbindlist(rd, use.names = TRUE)
