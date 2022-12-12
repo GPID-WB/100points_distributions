@@ -80,6 +80,7 @@ get_gd_calcs <- function(level, vctr, mean, id) {
 poss_get_gd_calcs <- purrr::possibly(.f = get_gd_calcs,
                                      otherwise = NULL)
 
+
 fmt_sve <- function(dt) {
   dt <- copy(dt)
   nvars <- c("country_code", "year", "welfare_type")
@@ -89,7 +90,7 @@ fmt_sve <- function(dt) {
   ][, id := NULL]
 
   # save
-  haven::write_dta(dt, fs::path("data/singles", id, ext = "dta"))
+  # haven::write_dta(dt, fs::path("data/singles", id, ext = "dta"))
   qs::qsave(dt, fs::path("data/singles", id, ext = "qs"))
 
 }
@@ -97,13 +98,19 @@ fmt_sve <- function(dt) {
 
 
 
-get_bin_dist <- function(pl) {
+get_micro_dist <- function(pl) {
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  ## load data and order --------
 
   dt   <- pipload::pip_load_cache(pl$country_code,
                                   pl$surveyid_year,
                                   verbose = FALSE)
 
-  setorder(dt, welfare_ppp, weight)
+  setorder(dt, imputation_id, welfare_ppp, weight)
+
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  ## bins ant totals --------
+
   dt[,
      # get bins and total pop and welfare
      `:=`(
@@ -113,8 +120,12 @@ get_bin_dist <- function(pl) {
                                      output = "simple"),
        tot_pop = sum(weight),
        tot_wlf = sum(welfare_ppp*weight)
-     )
+     ),
+     by = imputation_id
   ]
+
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  ## main measures --------
 
   dt[,
      # get avg wlf, pop and wlf shared
@@ -125,13 +136,22 @@ get_bin_dist <- function(pl) {
        quantile      <- max(welfare_ppp)
        list(avg_welfare, pop_share, welfare_share, quantile)
      },
-     by = bin]
+     by = .(imputation_id, bin)]
+
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  ## Getting means --------
 
   dt <-
     dt[,
+       # mean by impuration and bin
        lapply(.SD, mean),
-       by = bin,
+       by = .(imputation_id, bin),
        .SDcols =  c("avg_welfare", "pop_share", "welfare_share", "quantile")
+    ][,
+      # mean by bin
+      lapply(.SD, mean),
+      by = .(bin),
+      .SDcols =  c("avg_welfare", "pop_share", "welfare_share", "quantile")
     ]
 
   dt[,

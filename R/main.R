@@ -22,5 +22,5 @@ source("R/init.R")
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 source("R/gd_100.R")
-source("R/bin_100.R")
+source("R/micro_bin_100.R")
 
