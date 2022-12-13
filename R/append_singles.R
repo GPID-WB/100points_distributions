@@ -58,6 +58,11 @@ for (p in seq_along(ppps)) {
   }
 }
 
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Save in other formats   ---------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
 # Get qs world files
 fs::dir_ls(path = album_dir,
            regexp = "world.*qs$") |>
