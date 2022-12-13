@@ -68,7 +68,11 @@ fs::dir_ls(path = album_dir,
               .y = .,
               .f = ~{
                 nm <- fs::path_ext_remove(.x)
+                # save ad dta
                 haven::write_dta(data = .y,
-                                 path = fs::path(nm, ext = "dta")
-                )
-              })}()
+                                 path = fs::path(nm, ext = "dta"))
+                # save as csv
+                readr::write_csv(x = .y,
+                                 file = fs::path(nm, ext = "csv"))
+              })
+    }()
