@@ -58,11 +58,17 @@ for (p in seq_along(ppps)) {
   }
 }
 
-
-
-
-
-
-
-
-
+# Get qs world files
+fs::dir_ls(path = album_dir,
+           regexp = "world.*qs$") |>
+  # load data
+  map(qs::qread) |>
+  # get file names, remove qs, and save as dta
+  {\(.) walk2(.x = names(.),
+              .y = .,
+              .f = ~{
+                nm <- fs::path_ext_remove(.x)
+                haven::write_dta(data = .y,
+                                 path = fs::path(nm, ext = "dta")
+                )
+              })}()
