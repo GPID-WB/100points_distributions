@@ -85,9 +85,12 @@ fmt_sve <- function(dt) {
   dt <- copy(dt)
   nvars <- c("country_code", "year", "welfare_type")
   id    <- unique(dt[, id])
+
   dt[,
      (nvars) := tstrsplit(id, split = "_")
   ][, id := NULL]
+
+  id <- glue("{id}_{nq}bin_{ppp_year}PPP")
 
   # save
   # haven::write_dta(dt, fs::path("data/singles", id, ext = "dta"))

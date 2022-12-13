@@ -23,4 +23,10 @@ source("R/init.R")
 
 source("R/gd_100.R")
 source("R/micro_bin_100.R")
+source("R/append_singles.R")
+
+if (require(pushoverr)) {
+  pushoverr::pushover("work done")
+}
+
 

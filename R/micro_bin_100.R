@@ -11,7 +11,7 @@ source("R/init.R")
 
 
 pfw <- pipload::pip_load_aux("pfw") |>
-  {\(.) .[use_bin == 1 || use_microdata == 1]}()
+  {\(.) .[use_groupdata != 1]}()
 
 
 fpf <- pfw[, .(country_code,
@@ -24,7 +24,15 @@ fpf[,
     id := paste(country_code, reporting_year, welfare_type, sep = "_")
 ]
 
-# fpf <- fpf[1:2]
+
+# Testing: here we have to include some code that allows the use to select
+# different countries, years, etc.
+# st <- sample(nrow(fpf), size = 3, replace =FALSE)
+# fpf <- fpf[st]
+
+
+# fpf <- fpf[country_code %in% c("SOM", "COL") & surveyid_year == 2017]
+
 fpf <- fpf |>
   split(by = "id")
 
