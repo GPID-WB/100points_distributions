@@ -109,7 +109,7 @@ get_micro_dist <- function(pl) {
                                   pl$surveyid_year,
                                   verbose = FALSE)
 
-  setorder(dt, imputation_id, welfare_ppp, weight)
+  setorder(dt, imputation_id, reporting_level, welfare_ppp, weight)
 
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   ## bins ant totals --------
@@ -124,7 +124,7 @@ get_micro_dist <- function(pl) {
        tot_pop = sum(weight),
        tot_wlf = sum(welfare_ppp*weight)
      ),
-     by = imputation_id
+     by = c("imputation_id", "reporting_level")
   ]
 
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -139,7 +139,7 @@ get_micro_dist <- function(pl) {
        quantile      <- max(welfare_ppp)
        list(avg_welfare, pop_share, welfare_share, quantile)
      },
-     by = .(imputation_id, bin)]
+     by = .(imputation_id, reporting_level, bin)]
 
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   ## Getting means --------
@@ -148,12 +148,12 @@ get_micro_dist <- function(pl) {
     dt[,
        # mean by impuration and bin
        lapply(.SD, mean),
-       by = .(imputation_id, bin),
+       by = .(imputation_id, reporting_level, bin),
        .SDcols =  c("avg_welfare", "pop_share", "welfare_share", "quantile")
     ][,
       # mean by bin
       lapply(.SD, mean),
-      by = .(bin),
+      by = .(reporting_level, bin),
       .SDcols =  c("avg_welfare", "pop_share", "welfare_share", "quantile")
     ]
 

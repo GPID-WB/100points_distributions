@@ -26,7 +26,7 @@ source("R/micro_bin_100.R")
 source("R/append_singles.R")
 
 if (require(pushoverr)) {
-  pushoverr::pushover("work done")
+  pushoverr::pushover("Done creating singles and album")
 }
 
 

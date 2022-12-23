@@ -51,7 +51,7 @@ for (p in seq_along(ppps)) {
     ### load data and append ---------
     ldist <- map(file_paths, qs::qread)
 
-    whole <- rbindlist(ldist, use.names = TRUE)
+    whole <- rbindlist(ldist, use.names = TRUE, fill=TRUE)
 
     qs::qsave(whole, file = fs::path(album_dir, glue("world_{patter}"), ext = ext))
 
@@ -81,3 +81,10 @@ fs::dir_ls(path = album_dir,
                                  file = fs::path(nm, ext = "csv"))
               })
     }()
+
+
+if (require(pushoverr)) {
+  pushoverr::pushover("Done creating world files")
+}
+
+
