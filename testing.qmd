@@ -1,0 +1,300 @@
+---
+title: "Testing 100 data points distribution"
+# author: "R.Andres Castaneda"
+execute:
+  echo: false
+  output: false
+format: 
+   html:
+     df-print: paged
+     fontsize: 1.1em
+     linestretch: 1.7
+     theme:
+       light: flatly
+       dark: darkly
+editor: visual
+---
+
+## No monotonic distribution in welfare average 
+
+```{r}
+#| label:  libraries
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#                   Load Libraries   ---------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+library(data.table)
+library(janitor)
+library(here)
+library(ggplot2)
+source("R/init.R")
+
+
+```
+
+```{r}
+#| label: set-up
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#Set up   ---------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+wd <- qs::qread("data/album/world_100bin_2017PPP.qs")
+setorderv(wd,
+          c(
+            "country_code",
+            "year",
+            "welfare_type",
+            "reporting_level",
+            "bin"
+          ))
+
+vars  <- c("avg_welfare", "welfare_share", "quantile")
+dvars <- paste0("d", vars)
+tvars <- paste0("t", vars)
+
+wd[,
+  (dvars) := lapply(.SD, \(.x) {
+                  .x - shift(.x)
+                }
+                ),
+  by = .(country_code,
+        reporting_level,
+        welfare_type,
+        year),
+  .SDcols = vars
+  ][, 
+    (tvars) := 
+      lapply(.SD, \(.d) {
+      .d < 0
+        }
+      ),
+    by = .(country_code,
+        reporting_level,
+        welfare_type,
+        year),
+  .SDcols = dvars
+    ]
+
+```
+
+```{r}
+#| label: avg-welfare
+aw <- 
+  wd[davg_welfare == TRUE, 
+     .(bins = toString(bin)), 
+     by = c("country_code", "year")] 
+
+pfw <- pipload::pip_load_aux("pfw")
+pfw[, year := as.character(year)]
+
+dt <-
+  merge(x = aw,
+        y = pfw,
+        by = c("country_code", "year"))
+
+use_vars <- grep("^use_", names(dt), value = TRUE) |>
+  c("country_code", "year", "bins")
+
+dt[, data_type := fcase(use_imputed == 1, "imputed",
+                        use_microdata == 1, "microdata", 
+                        use_groupdata == 1, "groupdata", 
+                        use_bin == 1, "bin", 
+                        default = "")]
+```
+
+Data points for which welfare average in bin `b` is lower than that in `b-1`. Only `r dt[data_type == "microdata", .N]` cases come from microdata, and `r dt[data_type != "microdata", .N]` from bin data.
+
+```{r}
+#| output: true
+
+dt[, c("country_code", "year", "bins", "data_type")]
+```
+
+```{r}
+
+de <- 
+  wd[dwelfare_share == TRUE, 
+    c("country_code", "year", "bin")]
+
+```
+
+The main problem is due to too many repeated values in the misbehaved microdata. See, for example, all the jumps in the histogram of ARG 1994 in contrast to a better-behaved dataset like COL 2017.
+
+```{r}
+#| output: true
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#  ---------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+# 
+# fpf <- pfw[, .(country_code,
+#                surveyid_year,
+#                reporting_year,
+#                welfare_type
+# )]
+# 
+# fpf[,
+#     id := paste(country_code, reporting_year, welfare_type, sep = "_")
+# ]
+# 
+# 
+# fpf <- fpf[country_code %in% c("SOM", "COL") & surveyid_year == 2017]
+# 
+# fpf <- fpf |>
+#   split(by = "id")
+# 
+# 
+# pl <- fpf[[1]]
+# 
+# 
+# 
+dt   <- pipload::pip_load_cache(c("COL", "ARG"),
+                                c(2017, 1994),
+                                verbose = FALSE)
+
+dt <- dt[!(country_code == "ARG" & surveyid_year == 2017)]
+
+setorder(dt, country_code, surveyid_year, imputation_id, reporting_level, welfare_ppp, weight)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## bins ant totals --------
+
+dt[,
+   # get bins and total pop and welfare
+   `:=`(
+     bin = wbpip:::md_compute_bins(welfare_ppp,
+                                   weight,
+                                   nbins = 100,
+                                   output = "simple"),
+     tot_pop = sum(weight),
+     tot_wlf = sum(welfare_ppp*weight)
+   ),
+   by = c("country_code", "surveyid_year", "imputation_id", "reporting_level")
+]
+
+
+ggplot(dt[bin < 60], aes(x=welfare_ppp)) +
+  geom_histogram(aes(y=..density..), colour="black", fill="white")+
+  geom_density(alpha=.2, fill="#FF6666") +
+  facet_wrap(country_code + surveyid_year ~ ., 
+             scales = "free")
+```
+
+When the same welfare value is repeated across bins, we may find that the threshold value (i.e., percentile) of bin `b` is the same as the welfare average of `b+1` and, sometimes, part of the values of `b+2`.
+
+```{r}
+#| label: same-welfare
+#| output: true
+#| tbl-cap-location: bottom
+#| tbl-cap: "ARG 1994"
+
+
+wd[country_code == "ARG" & 
+     year == 1994 &
+     between(bin, 47, 49), 
+   c("bin", "avg_welfare", "quantile")
+   ]
+
+
+```
+
+This problematic because we get inconsistencies like having the same headcount for different bins.
+
+```{r}
+#| output: true
+popshares <- seq(from = .47, to = .5, by = .01)
+
+hcs <- 
+  sapply(popshares, \(.) {
+    x <- pipr::get_stats("ARG", 1994, popshare = .)
+    setDT(x)
+    x[, headcount]
+  })
+
+data.table(popshare = popshares, 
+           headcount = hcs)
+```
+
+## Non-monotonic distribution in welfare share
+
+```{r}
+#| label: shr-welfare
+sw <- 
+  wd[dwelfare_share == TRUE, 
+     .(bins = toString(bin)), 
+     by = c("country_code", "year")] 
+
+df <-
+  merge(x = sw,
+        y = pfw,
+        by = c("country_code", "year"))
+
+use_vars <- grep("^use_", names(df), value = TRUE) |>
+  c("country_code", "year", "bins")
+
+df[, data_type := fcase(use_imputed == 1, "imputed",
+                        use_microdata == 1, "microdata", 
+                        use_groupdata == 1, "groupdata", 
+                        use_bin == 1, "bin", 
+                        default = "")]
+
+
+df[, c("country_code", "year", "bins", "data_type")]
+```
+
+```{r}
+#| label: pfw-treatment
+
+fpf <- pfw[, .(country_code,
+               surveyid_year,
+               reporting_year,
+               welfare_type
+)]
+
+fpf[,
+    id := paste(country_code, 
+                reporting_year, 
+                welfare_type, 
+                sep = "_")]
+```
+
+```{r}
+#| label: arg-20-wlf-shr
+cc <- "ARG"
+yr <- 2002
+
+fpf <- fpf[country_code == cc & 
+             surveyid_year == yr]
+
+pl <- fpf |>
+  split(by = "id")
+
+pl <- pl[[1]]
+
+ar <- get_micro_dist(pl)
+```
+
+In most of the cases where the welfare share in `b` is smaller than in `b-1`, the differences is very small, mainly due to the way we create bins.
+
+```{r}
+#| label: plot-sh-wlf
+#| output: true
+
+we <- wd[dwelfare_share < 0]
+we[, dws := -1*dwelfare_share]
+sdws <- we[, sd(dws, na.rm = TRUE)]
+mnws <- we[, mean(dws, na.rm = TRUE)]
+
+ggplot( we[dws < (mnws + 2*sdws)], 
+        aes(x = dwelfare_share)) +
+  geom_histogram(aes(y = ..density..), 
+                 colour = "black", 
+                 fill = "white") +
+  geom_density(alpha = .2, 
+               fill = "#FF6666")
+
+
+
+```
