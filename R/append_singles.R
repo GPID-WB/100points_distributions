@@ -51,7 +51,8 @@ for (p in seq_along(ppps)) {
     ### load data and append ---------
     ldist <- map(file_paths, qs::qread)
 
-    whole <- rbindlist(ldist, use.names = TRUE, fill=TRUE)
+    whole <- rbindlist(ldist, use.names = TRUE, fill = TRUE)
+    setnames(whole, "bin", "percentile")
 
     qs::qsave(whole, file = fs::path(album_dir, glue("world_{patter}"), ext = ext))
 

@@ -15,7 +15,7 @@ format:
 editor: visual
 ---
 
-## No monotonic distribution in welfare average 
+## No monotonic distribution in welfare average
 
 ```{r}
 #| label:  libraries
@@ -56,7 +56,8 @@ tvars <- paste0("t", vars)
 
 wd[,
   (dvars) := lapply(.SD, \(.x) {
-                  .x - shift(.x)
+                  y <- .x - shift(.x)
+                  round(y, 5)
                 }
                 ),
   by = .(country_code,
@@ -289,11 +290,11 @@ mnws <- we[, mean(dws, na.rm = TRUE)]
 
 ggplot( we[dws < (mnws + 2*sdws)], 
         aes(x = dwelfare_share)) +
-  geom_histogram(aes(y = ..density..), 
+  geom_histogram(aes(y  = ..density..), 
                  colour = "black", 
-                 fill = "white") +
-  geom_density(alpha = .2, 
-               fill = "#FF6666")
+                 fill   = "white") +
+  geom_density(alpha    = .2, 
+               fill     = "#FF6666")
 
 
 
