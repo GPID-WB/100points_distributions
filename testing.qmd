@@ -82,7 +82,7 @@ wd[,
 ```{r}
 #| label: avg-welfare
 aw <- 
-  wd[davg_welfare == TRUE, 
+  wd[tavg_welfare == TRUE, 
      .(bins = toString(bin)), 
      by = c("country_code", "year")] 
 
@@ -115,7 +115,7 @@ dt[, c("country_code", "year", "bins", "data_type")]
 ```{r}
 
 de <- 
-  wd[dwelfare_share == TRUE, 
+  wd[twelfare_share == TRUE, 
     c("country_code", "year", "bin")]
 
 ```
@@ -222,7 +222,7 @@ data.table(popshare = popshares,
 ```{r}
 #| label: shr-welfare
 sw <- 
-  wd[dwelfare_share == TRUE, 
+  wd[twelfare_share == TRUE, 
      .(bins = toString(bin)), 
      by = c("country_code", "year")] 
 
