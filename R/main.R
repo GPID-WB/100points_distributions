@@ -29,4 +29,6 @@ if (require(pushoverr)) {
   pushoverr::pushover("Done creating singles and album")
 }
 
+source("R/copy_to_p.R")
+
 

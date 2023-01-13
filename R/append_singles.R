@@ -53,6 +53,15 @@ for (p in seq_along(ppps)) {
 
     whole <- rbindlist(ldist, use.names = TRUE, fill = TRUE)
     setnames(whole, "bin", "percentile")
+    ovars <- c(
+      "country_code",
+      "year",
+      "reporting_level",
+      "welfare_type",
+      "percentile"
+    )
+    setorderv(whole, ovars)
+    setcolorder(whole, ovars)
 
     qs::qsave(whole, file = fs::path(album_dir, glue("world_{patter}"), ext = ext))
 

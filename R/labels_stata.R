@@ -28,6 +28,6 @@ for (i in seq_along(dta_files)) {
        save, replace
        ')
 
-  stata(command)
+  stata(command, stata.echo = FALSE)
 
 }
