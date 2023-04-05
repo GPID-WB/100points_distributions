@@ -46,12 +46,16 @@ for (p in seq_along(ppps)) {
 
     patter         <- glue("{bins[[b]]}_{ppps[[p]]}")
     selected_files <- grep(patter, files_name, value = TRUE)
+
+    if (length(selected_files) == 0) next # skip and go to next iteration
+
     file_paths     <- fs::path(singles_dir, selected_files, ext = ext)
 
     ### load data and append ---------
     ldist <- map(file_paths, qs::qread)
 
     whole <- rbindlist(ldist, use.names = TRUE, fill = TRUE)
+    whole[, year := as.numeric(year)]
     setnames(whole, "bin", "percentile")
     ovars <- c(
       "country_code",

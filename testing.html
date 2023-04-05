@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>Testing 100 data points distribution</title>
+<title>Testing data points distribution</title>
 <style>
 code{white-space: pre-wrap;}
 span.smallcaps{font-variant: small-caps;}
@@ -50,7 +50,7 @@ ul.task-list li input[type="checkbox"] {
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h1 class="title">Testing 100 data points distribution</h1>
+<h1 class="title">Testing data points distribution</h1>
 </div>
 
 
@@ -76,13 +76,13 @@ ul.task-list li input[type="checkbox"] {
 <div class="cell">
 
 </div>
-<p>Data points for which welfare average in bin <code>b</code> is lower than that in <code>b-1</code>. Only 0 cases come from microdata, and 0 from bin data.</p>
+<p>Data points for which welfare average in bin <code>b</code> is lower than that in <code>b-1</code>. Only 0 cases come from microdata, and 6 from bin data.</p>
 <div class="cell">
 <div class="cell-output-display">
 
 <div data-pagedtable="false">
   <script data-pagedtable-source="" type="application/json">
-{"columns":[{"label":["country_code"],"name":[1],"type":["chr"],"align":["left"]},{"label":["year"],"name":[2],"type":["chr"],"align":["left"]},{"label":["bins"],"name":[3],"type":["chr"],"align":["left"]},{"label":["data_type"],"name":[4],"type":["chr"],"align":["left"]}],"data":[],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+{"columns":[{"label":["country_code"],"name":[1],"type":["chr"],"align":["left"]},{"label":["year"],"name":[2],"type":["dbl"],"align":["right"]},{"label":["bins"],"name":[3],"type":["chr"],"align":["left"]},{"label":["data_type"],"name":[4],"type":["chr"],"align":["left"]}],"data":[{"1":"IND","2":"2017","3":"191","4":"imputed"},{"1":"IND","2":"2018","3":"294, 303, 391, 478, 605, 695, 703, 756","4":"imputed"},{"1":"IND","2":"2019","3":"348, 624, 20, 36, 43, 53, 76, 89, 103, 104, 116, 117, 154, 169, 183, 187, 189, 192, 205, 215, 222, 262, 274, 280, 294, 341, 362, 371, 383, 389, 413, 466, 486, 492, 554, 611, 701, 714","4":"imputed"},{"1":"SOM","2":"2017","3":"52, 182, 266, 566, 657, 665, 694","4":"imputed"},{"1":"SSD","2":"2016","3":"2, 124, 181, 312, 356, 391, 415, 420, 439, 521, 588, 611, 618, 670, 702, 709, 741","4":"imputed"},{"1":"ZWE","2":"2019","3":"52, 192, 217, 237, 266, 283, 285, 299, 365, 371, 413, 427, 437, 445, 450, 468, 471, 476, 480, 490, 497, 504, 507, 519, 528, 533, 551, 557, 559, 567, 569, 578, 581, 583, 585, 588, 591, 597, 600, 601, 612, 620, 630, 633, 640, 646, 659, 664, 677, 680, 686, 692, 712, 737, 740, 755, 779, 790, 792, 815, 838, 847, 851, 857, 863, 867, 873, 904, 911, 916","4":"imputed"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
   </script>
 </div>
 </div>
@@ -102,7 +102,7 @@ ul.task-list li input[type="checkbox"] {
 
 <div data-pagedtable="false"> <div class="table-caption">ARG 1994</div>
   <script data-pagedtable-source="" type="application/json">
-{"columns":[{"label":["bin"],"name":[1],"type":["dbl"],"align":["right"]},{"label":["avg_welfare"],"name":[2],"type":["dbl"],"align":["right"]},{"label":["quantile"],"name":[3],"type":["dbl"],"align":["right"]}],"data":[{"1":"47","2":"15.169968","3":"15.275223"},{"1":"48","2":"15.275223","3":"15.275223"},{"1":"49","2":"15.275223","3":"15.275223"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+{"columns":[{"label":["percentile"],"name":[1],"type":["dbl"],"align":["right"]},{"label":["avg_welfare"],"name":[2],"type":["dbl"],"align":["right"]},{"label":["percentile"],"name":[3],"type":["dbl"],"align":["right"]}],"data":[{"1":"47","2":"3.8089440","3":"47"},{"1":"48","2":"3.8188058","3":"48"},{"1":"49","2":"3.8188058","3":"49"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
   </script>
 </div>
 </div>
@@ -135,6 +135,12 @@ ul.task-list li input[type="checkbox"] {
 <div class="cell-output-display">
 <p><img src="testing_files/figure-html/plot-sh-wlf-1.png" class="img-fluid" width="672"></p>
 </div>
+</div>
+</section>
+<section id="specific-data" class="level2">
+<h2 class="anchored" data-anchor-id="specific-data">Specific data</h2>
+<div class="cell">
+
 </div>
 </section>
 

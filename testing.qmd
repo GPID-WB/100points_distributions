@@ -1,5 +1,5 @@
 ---
-title: "Testing 100 data points distribution"
+title: "Testing data points distribution"
 # author: "R.Andres Castaneda"
 execute:
   echo: false
@@ -25,7 +25,6 @@ editor: visual
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 library(data.table)
-library(janitor)
 library(here)
 library(ggplot2)
 source("R/init.R")
@@ -40,17 +39,20 @@ source("R/init.R")
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #Set up   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-wd <- qs::qread("data/album/world_100bin_2017PPP.qs")
+wd <- 
+  glue::glue("data/album/world_{nq}bin_{py}PPP.qs") |> 
+  qs::qread()
+
 setorderv(wd,
           c(
             "country_code",
             "year",
             "welfare_type",
             "reporting_level",
-            "bin"
+            "percentile"
           ))
 
-vars  <- c("avg_welfare", "welfare_share", "quantile")
+vars  <- c("avg_welfare", "welfare_share", "percentile")
 dvars <- paste0("d", vars)
 tvars <- paste0("t", vars)
 
@@ -84,11 +86,12 @@ wd[,
 #| label: avg-welfare
 aw <- 
   wd[tavg_welfare == TRUE, 
-     .(bins = toString(bin)), 
-     by = c("country_code", "year")] 
+     .(bins = toString(percentile)), 
+     by = c("country_code", "year")
+     ]
 
 pfw <- pipload::pip_load_aux("pfw")
-pfw[, year := as.character(year)]
+# pfw[, year := as.character(year)]
 
 dt <-
   merge(x = aw,
@@ -117,7 +120,7 @@ dt[, c("country_code", "year", "bins", "data_type")]
 
 de <- 
   wd[twelfare_share == TRUE, 
-    c("country_code", "year", "bin")]
+    c("country_code", "year", "percentile")]
 
 ```
 
@@ -125,32 +128,7 @@ The main problem is due to too many repeated values in the misbehaved microdata.
 
 ```{r}
 #| output: true
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#  ---------
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-# 
-# fpf <- pfw[, .(country_code,
-#                surveyid_year,
-#                reporting_year,
-#                welfare_type
-# )]
-# 
-# fpf[,
-#     id := paste(country_code, reporting_year, welfare_type, sep = "_")
-# ]
-# 
-# 
-# fpf <- fpf[country_code %in% c("SOM", "COL") & surveyid_year == 2017]
-# 
-# fpf <- fpf |>
-#   split(by = "id")
-# 
-# 
-# pl <- fpf[[1]]
-# 
-# 
-# 
+ 
 dt   <- pipload::pip_load_cache(c("COL", "ARG"),
                                 c(2017, 1994),
                                 verbose = FALSE)
@@ -167,7 +145,7 @@ dt[,
    `:=`(
      bin = wbpip:::md_compute_bins(welfare_ppp,
                                    weight,
-                                   nbins = 100,
+                                   nbins = nq,
                                    output = "simple"),
      tot_pop = sum(weight),
      tot_wlf = sum(welfare_ppp*weight)
@@ -194,8 +172,8 @@ When the same welfare value is repeated across bins, we may find that the thresh
 
 wd[country_code == "ARG" & 
      year == 1994 &
-     between(bin, 47, 49), 
-   c("bin", "avg_welfare", "quantile")
+     between(percentile, 47, 49), 
+   c("percentile", "avg_welfare", "percentile")
    ]
 
 
@@ -224,7 +202,7 @@ data.table(popshare = popshares,
 #| label: shr-welfare
 sw <- 
   wd[twelfare_share == TRUE, 
-     .(bins = toString(bin)), 
+     .(bins = toString(percentile)), 
      by = c("country_code", "year")] 
 
 df <-
@@ -297,5 +275,50 @@ ggplot( we[dws < (mnws + 2*sdws)],
                fill     = "#FF6666")
 
 
+
+```
+
+## Specific data
+
+```{r}
+
+dt   <- pipload::pip_load_cache(c("CIV"),
+                                c(1998, 2002, 2008),
+                                verbose = FALSE)
+
+setorder(dt, country_code, surveyid_year, imputation_id, reporting_level, welfare_ppp, weight)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## bins ant totals --------
+
+dt[,
+   # get bins and total pop and welfare
+   `:=`(
+     bin = wbpip:::md_compute_bins(welfare_ppp,
+                                   weight,
+                                   nbins = nq,
+                                   output = "simple"),
+     tot_pop = sum(weight),
+     tot_wlf = sum(welfare_ppp*weight)
+   ),
+   by = c("country_code", "surveyid_year", "imputation_id", "reporting_level")
+]
+
+
+ggplot(dt[bin < 60], aes(x=welfare_ppp)) +
+  geom_histogram(aes(y = after_stat(density)), colour="black", fill="white")+
+  geom_density(alpha=.2, fill="#FF6666") +
+  facet_wrap(country_code + surveyid_year ~ ., 
+             scales = "free")
+
+
+civ <- dt[ survey_year == 1998 & between(bin, 57,60), c("welfare_ppp", "weight") ]
+
+
+ggplot(civ, aes(x = weight)) +
+  geom_histogram(aes(y = after_stat(count)), colour = "black", fill="white")+
+  geom_density(alpha=.2, fill="#FF6666")
+
+  
 
 ```

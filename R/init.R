@@ -20,8 +20,8 @@ source("R/functions.R")
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #                   Initial parameters   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-ppp_year <- py <- 2011
-nq       <- 100
+ppp_year <- py <- 2017
+nq       <- 1000
 lorenz   <- NULL
 popshare <- seq(from = 1/nq, to = 1, by = 1/nq)
 
