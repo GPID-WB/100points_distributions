@@ -79,8 +79,10 @@ fpf <- pfw[, .(country_code,
                pop_domain,
                welfare_type)]
 
-fpf[,
-    id := paste(country_code, surveyid_year, welfare_type, sep = "_")
+fpf[, `:=`(
+    id = paste(country_code, surveyid_year, welfare_type, sep = "_"),
+    version = version
+  )
 ]
 
 # fpf <- fpf[1:5]
@@ -123,6 +125,6 @@ rd <- compact(rd)
 # format and save data   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-walk(rd, fmt_sve)
+walk(rd, fmt_sve, version = version)
 
 # rd <- rbindlist(rd, use.names = TRUE)

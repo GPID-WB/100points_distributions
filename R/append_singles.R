@@ -10,8 +10,8 @@ source("R/init.R")
 # load all data and split   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-singles_dir <- "data/singles"
-album_dir <- "data/album"
+singles_dir <- fs::path("data/singles", version)
+album_dir <- fs::path("data/album", version)
 ext <- "qs"
 
 
@@ -30,46 +30,41 @@ files_name <-
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ## find out bins groups and ppp years --------
 
-vars <- c("country_code", "year", "welfare_type", "bins", "ppp_year")
+vars <- c("country_code", "year", "welfare_type", "bins")
 dt   <- data.table(file = files_name)
 
 dt[, (vars) := tstrsplit(file, split = "_")]
 
 bins <- dt[, unique(bins)]
-ppps <- dt[, unique(ppp_year)]
 
-#loop over PPP years
+# loop o ver bin groups
+for (b in seq_along(bins)) {
 
-for (p in seq_along(ppps)) {
-  # loop o ver bin groups
-  for (b in seq_along(bins)) {
+  patter         <- glue("{bins[[b]]}")
+  selected_files <- grep(patter, files_name, value = TRUE)
 
-    patter         <- glue("{bins[[b]]}_{ppps[[p]]}")
-    selected_files <- grep(patter, files_name, value = TRUE)
+  if (length(selected_files) == 0) next # skip and go to next iteration
 
-    if (length(selected_files) == 0) next # skip and go to next iteration
+  file_paths     <- fs::path(singles_dir, selected_files, ext = ext)
 
-    file_paths     <- fs::path(singles_dir, selected_files, ext = ext)
+  ### load data and append ---------
+  ldist <- map(file_paths, qs::qread)
 
-    ### load data and append ---------
-    ldist <- map(file_paths, qs::qread)
+  whole <- rbindlist(ldist, use.names = TRUE, fill = TRUE)
+  whole[, year := as.numeric(year)]
+  setnames(whole, "bin", "percentile")
+  ovars <- c(
+    "country_code",
+    "year",
+    "reporting_level",
+    "welfare_type",
+    "percentile"
+  )
+  setorderv(whole, ovars)
+  setcolorder(whole, ovars)
 
-    whole <- rbindlist(ldist, use.names = TRUE, fill = TRUE)
-    whole[, year := as.numeric(year)]
-    setnames(whole, "bin", "percentile")
-    ovars <- c(
-      "country_code",
-      "year",
-      "reporting_level",
-      "welfare_type",
-      "percentile"
-    )
-    setorderv(whole, ovars)
-    setcolorder(whole, ovars)
+  qs::qsave(whole, file = fs::path(album_dir, glue("world_{patter}"), ext = ext))
 
-    qs::qsave(whole, file = fs::path(album_dir, glue("world_{patter}"), ext = ext))
-
-  }
 }
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

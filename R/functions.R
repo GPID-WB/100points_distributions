@@ -7,7 +7,8 @@ gd_pop_wlf <- function(pl) {
   # pl <- list(...)
   dt   <- pipload::pip_load_cache(pl$country_code,
                                   pl$surveyid_year,
-                                  verbose = FALSE)
+                                  verbose = FALSE,
+                                  version = pl$version)
 
   levels     <- dt[, unique(reporting_level)]
   welfare    <- vector("list", length(levels))
@@ -81,7 +82,7 @@ poss_get_gd_calcs <- purrr::possibly(.f = get_gd_calcs,
                                      otherwise = NULL)
 
 
-fmt_sve <- function(dt) {
+fmt_sve <- function(dt, version) {
   dt <- copy(dt)
   nvars <- c("country_code", "year", "welfare_type")
   id    <- unique(dt[, id])
@@ -90,11 +91,11 @@ fmt_sve <- function(dt) {
      (nvars) := tstrsplit(id, split = "_")
   ][, id := NULL]
 
-  id <- glue("{id}_{nq}bin_{ppp_year}PPP")
+  id <- glue("{id}_{nq}bin")
 
   # save
   # haven::write_dta(dt, fs::path("data/singles", id, ext = "dta"))
-  qs::qsave(dt, fs::path("data/singles", id, ext = "qs"))
+  qs::qsave(dt, fs::path("data/singles", version, id, ext = "qs"))
 
 }
 
@@ -107,7 +108,8 @@ get_micro_dist <- function(pl) {
 
   dt   <- pipload::pip_load_cache(pl$country_code,
                                   pl$surveyid_year,
-                                  verbose = FALSE)
+                                  verbose = FALSE,
+                                  version = pl$version)
 
   setorder(dt, imputation_id, reporting_level, welfare_ppp, weight)
 

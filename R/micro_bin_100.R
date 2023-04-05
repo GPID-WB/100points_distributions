@@ -20,10 +20,10 @@ fpf <- pfw[, .(country_code,
                welfare_type
 )]
 
-fpf[,
-    id := paste(country_code, reporting_year, welfare_type, sep = "_")
-]
-
+fpf[, `:=`(
+  id = paste(country_code, reporting_year, welfare_type, sep = "_"),
+  version = version)
+  ]
 
 # Testing: here we have to include some code that allows the use to select
 # different countries, years, etc.
@@ -35,7 +35,6 @@ fpf[,
 
 fpf <- fpf |>
   split(by = "id")
-
 
 poss_get_bin_dist <- purrr::possibly(.f = get_micro_dist,
                                      otherwise = NULL)
@@ -55,6 +54,6 @@ dr_err
 # format and save data   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-walk(dr, fmt_sve)
+walk(dr, fmt_sve, version = version)
 
 # rd <- rbindlist(rd, use.names = TRUE)

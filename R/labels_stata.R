@@ -11,7 +11,7 @@ dta_files <- fs::dir_ls(path = "data/album/",
   fs::path_wd()
 
 for (i in seq_along(dta_files)) {
-  x <-dta_files[[i]]
+  x <- dta_files[[i]]
 
   command <-
     glue('
