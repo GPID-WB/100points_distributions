@@ -1,15 +1,12 @@
 if (Sys.info()["user"] == "wb384996" &&
     Sys.info()["nodename"] == "WBGMSDDG001") {
 
-  files <- fs::dir_ls(path = "data/album/",
-             type = "file")
-  names <- fs::path_file(files)
+  dirs <- fs::dir_ls(path = "data/album/")
 
-  to <- fs::path("p:/03.pip/estimates/percentiles", names)
-
-  saved <-
-    file.copy(from = files,
-              to   = to,
-              overwrite = TRUE)
+  fs::dir_copy(path = dirs,
+               new_path = fs::path("p:/03.pip/estimates/percentiles",
+                                   fs::path_file(dirs)),
+               overwrite = FALSE
+               )
 
 }

@@ -48,7 +48,9 @@ dr_err <-
   names()
 dr_err
 
-
+dr <-
+  dr |>
+  purrr::keep(.p = ~{!is.null(.x)})
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # format and save data   ---------
