@@ -5,26 +5,31 @@ options(
   RStata.StataVersion = 17
 )
 
-dta_files <- fs::dir_ls(path = "data/album/",
+relative_path <- fs::dir_ls(path = "data/album/",
                         type = "file",
-                        regexp = "dta$") |>
-  fs::path_wd()
+                        regexp = "dta$",
+                        recurse = TRUE)
+versions <- gsub("(.+/)([0-9]+.*PROD)(.+)", "\\2", relative_path)
+
+dta_files <- fs::path_wd(relative_path)
 
 for (i in seq_along(dta_files)) {
-  x <- dta_files[[i]]
+  x   <- dta_files[[i]]
+  ver <- versions[[i]]
 
   command <-
     glue('
         use {x}, clear
-        label var reporting_level  "geographical area covered (urban, rural, national)"
-        label var percentile       "percentile"
-        label var avg_welfare      "welfare average of percentile"
-        label var pop_share        "population share of percentile"
-        label var welfare_share    "welfare share of percentile"
-        label var quantile         "welfare upper threshold of percentile"
-        label var country_code     "country code iso3"
+        char _dta[version] {ver}
+        label var country_code     "country/economy code"
         label var year             "year"
-        label var welfare_type     "income or consumption"
+        label var reporting_level  "reporting data level: rural, urban, or national coverage"
+        label var welfare_type     "income or consumption used in survey"
+        label var percentile       "percentile rank, 1-poorest, 100-richest"
+        label var avg_welfare      "average per capita daily consumption or income for the percentile group in PPP \\$"
+        label var pop_share        "share of population in percentile group"
+        label var welfare_share    "share of income held by each percentile group"
+        label var quantile         "upper threshold of income of percentile group"
        save, replace
        ')
 
