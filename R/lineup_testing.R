@@ -150,11 +150,29 @@ cache_inv <-
                                split = "_")]}() |>
   mutate(welfare_type = case_when(grepl("^c", tolower(welfare_type)) ~ "consumption",
                                   grepl("^i", tolower(welfare_type)) ~ "income",
-                                  .default = welfare_type)) |>
-  select(!!nvars, cache_id, survey_id )
+                                  .default = welfare_type),
+         lineup_year = as.numeric(surveyid_year)) |>
+  select(!!nvars, cache_id, survey_id, lineup_year )
 
 
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# reference table   ---------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+rt <-
+  du[,c("country_code", "survey_acronym", "welfare_type", "data_level")] |>
+  unique() |>
+  expand_grid(lineup_year = gls$PIP_REF_YEARS)
 
+
+# find those with matching obs in cache_inv
+rt_cach <-
+joyn::merge(rt, cache_inv,
+      by = c("country_code", "survey_acronym", "welfare_type", "lineup_year"))
+
+svy_dt <- rt_cach[report == "x & y"]
+lnp_dt <- rt_cach[report == "x"]
+
+# Then match those that need lineup.
 
 
 df <- pipload::pip_load_cache(cache_id = "AGO_2000_HBS_D1_CON_GPWG")
