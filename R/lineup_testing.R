@@ -88,6 +88,8 @@ dt <-
     grepl("^i", tolower(oth_welfare1_type)) ~ "income",
     .default = welfare_type
     )) |>
+  # inpovcal obs
+  filter(inpovcal == 1) |>
 
   # select vars
   select(country_code,
@@ -158,21 +160,50 @@ cache_inv <-
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # reference table   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+eco_vars <- c("country_code",
+              "welfare_type",
+              "data_level")
+
+economy <-  du[, ..eco_vars ] |>
+  unique()
+
 rt <-
-  du[,c("country_code", "survey_acronym", "welfare_type", "data_level")] |>
-  unique() |>
-  expand_grid(lineup_year = gls$PIP_REF_YEARS)
+  expand_grid(economy, lineup_year = gls$PIP_REF_YEARS)
 
 
 # find those with matching obs in cache_inv
 rt_cach <-
 joyn::merge(rt, cache_inv,
-      by = c("country_code", "survey_acronym", "welfare_type", "lineup_year"))
+      by = c("country_code", "welfare_type", "lineup_year"))
 
 svy_dt <- rt_cach[report == "x & y"]
-lnp_dt <- rt_cach[report == "x"]
+lnp_dt <- rt_cach[report == "x"
+                  ][,
+                     c("country_code",
+                         "welfare_type",
+                         "data_level" ,
+                         "lineup_year" )]
 
 # Then match those that need lineup.
+
+
+# get years to lineup for specific economy
+lnp_years <-
+  economy[1][lnp_dt,
+             on = c("country_code",
+                    "welfare_type",
+                    "data_level"),
+             nomatch = NULL][,
+                             lineup_year]
+
+
+  economy[1][cache_inv,
+             on = c("country_code",
+                    "welfare_type"),
+             nomatch = NULL]
+
+
+
 
 
 df <- pipload::pip_load_cache(cache_id = "AGO_2000_HBS_D1_CON_GPWG")
