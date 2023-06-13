@@ -37,7 +37,7 @@ gls <- pipfun::pip_create_globals(
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
-pipload::pip_load_all_aux(aux = c("cpi", "ppp", "pfw", "pop", "gdm", "gdp", "pce"),
+pipload::pip_load_all_aux(aux = c("cpi", "ppp", "pfw", "pop", "countries", "gdp", "pce"),
                           replace = TRUE)
 
 # merge pop, gdp, and cpe
@@ -59,9 +59,6 @@ nac <-
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Merge PFW info with NAC   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-
-lpfw <- lazy_dt(pfw)
 
 
 dom_vars <- str_subset(names(pfw), "domain$")
@@ -105,7 +102,11 @@ dt <-
                 by = c("country_code", "data_level"),
                 match_type = "m:1",
                 keep = "inner",
-                reportvar = FALSE)
+                reportvar = FALSE) |>
+  joyn::merge(countries[, c("country_code", "region_code")],
+              by = "country_code",
+              reportvar = FALSE,
+              keep = "left")
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ## Adjust NAC to survey years (for decimal years) --------
@@ -117,7 +118,8 @@ nac_adjusted <-
         vals <- map2_dbl(dt$survey_year, dt$data,
                  adjust_aux_values,
                  value_var = y)
-          tibble(!!y := vals)
+        var_name <- paste0("svy_", y)
+        tibble(!!var_name := vals)
       }) |>
   list_cbind()
 
@@ -156,13 +158,11 @@ cache_inv <-
          lineup_year = as.numeric(surveyid_year)) |>
   select(!!nvars, cache_id, survey_id, lineup_year )
 
-
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # reference table   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 eco_vars <- c("country_code",
-              "welfare_type",
-              "data_level")
+              "welfare_type")
 
 economy <-  du[, ..eco_vars ] |>
   unique()
@@ -176,34 +176,95 @@ rt_cach <-
 joyn::merge(rt, cache_inv,
       by = c("country_code", "welfare_type", "lineup_year"))
 
-svy_dt <- rt_cach[report == "x & y"]
+svy_dt <- rt_cach[report == "x & y"][,
+                                     c("country_code",
+                                       "welfare_type",
+                                       "lineup_year",
+                                       "surveyid_year",
+                                       "cache_id")] |>
+  arrange(country_code, welfare_type)
+
 lnp_dt <- rt_cach[report == "x"
                   ][,
                      c("country_code",
                          "welfare_type",
-                         "data_level" ,
-                         "lineup_year" )]
+                         "lineup_year")
+                    ][,
+                      # Nest to isolate lineup year
+                      .(lnp_data = .(.SD)),
+                      keyby = c("country_code",
+                                "welfare_type")
+                      ] |>
+  arrange(country_code, welfare_type)
+
+
+# Nest cache inventory
+cache_nest <-
+  cache_inv[, .(cache_data = .(.SD)),
+            keyby = c("country_code",
+                      "welfare_type")
+  ] |>
+  semi_join(lnp_dt) |>
+  arrange(country_code, welfare_type)
+
+
 
 # Then match those that need lineup.
 
+get_cacheid <- function(x, y) {
 
-# get years to lineup for specific economy
-lnp_years <-
-  economy[1][lnp_dt,
-             on = c("country_code",
-                    "welfare_type",
-                    "data_level"),
-             nomatch = NULL][,
-                             lineup_year]
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  # computations   ---------
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  x <- x[, lineup_year]
+  ly <- y[, lineup_year]
+  ci <- y[, cache_id]
+  si <- y[, surveyid_year]
+
+  a = findInterval(x, ly)
+  b <- a + 1
+  a[a == 0] <- 1
+  b[b > length(ly)] <- length(ly)
+
+  z <- data.table(cache_id1 = ci[a],
+                  cache_id2 = ci[b],
+                  svy_year1 = si[a],
+                  svy_year2 = si[b])
+  z[,
+    cache_id := list(.(unique(c(cache_id1,cache_id2)))),
+    1:nrow(z)
+    ][,
+      surveyid_year := list(.(unique(c(svy_year1,svy_year2)))),
+      1:nrow(z)]
+
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  # Return   ---------
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  # z[, c("surveyid_year", "cache_id")]
+  # z[, c( "cache_id")]
+  return(z)
+
+}
+
+de <-
+  map2(.x = lnp_dt$lnp_data,
+     .y = cache_nest$cache_data,
+     .f = get_cacheid) |>
+  list_rbind()
 
 
-  economy[1][cache_inv,
-             on = c("country_code",
-                    "welfare_type"),
-             nomatch = NULL]
+# unnest
+df <- lnp_dt[seq_len(.N),
+             lnp_data[[1L]],
+             by = c("country_code", "welfare_type")
+             ] # if I wanted to add the rest, nest with this `[lnp_dt, on = others]`
+
+dg <- data.table(df, de)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# add nac to lineup years and nac survey to svy_yearx   ---------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
 
 
-
-df <- pipload::pip_load_cache(cache_id = "AGO_2000_HBS_D1_CON_GPWG")
