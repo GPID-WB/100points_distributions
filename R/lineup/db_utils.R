@@ -89,3 +89,99 @@ get_values <- function(years, aux_df, value_var) {
   out <- aux_df[[value_var]][keep]
   return(out)
 }
+
+
+
+
+#' FIlter data.frame and convert it to list
+#'
+#' @param dt_ data.frame
+#' @param condition condition in `i`  as in  `DT[i,j]`
+#'
+#' @return
+#' @export
+#'
+#' @examples
+#' library(data.table)
+#' dt <- data.table(x = c("a", "a", "b", "c", "c"),
+#'  y = 1:5)
+#'
+#' filter2list(dt, y > 3)
+filter2list <- function(dt_, condition) {
+  # change to data.table
+  if (isFALSE(is.data.table(dt_))) {
+    dt_ <- as.data.table(dt_)
+  }
+
+  zt <- dt_[eval(substitute(condition))] |>
+    as.list()
+  return(zt)
+
+}
+
+
+
+
+
+#' Select proxy values
+#'
+#' Select GDP or PCE as proxy value based on pre-specified rules.
+#'
+#' PCE is the default for all countries, except in Sub-Saharan Africa where GDP
+#' is always used. If any PCE value is missing for the specific reference year,
+#' GDP is used.
+#'
+#' @param region_code character: World Bank three letter region code.
+#' @param ref_gdp numeric: GDP value for the reference year.
+#' @param ref_pce numeric: PCE value for the reference year.
+#' @param survey_gdp numeric: GDP value for the survey year.
+#' @param survey_pce numeric: PCE value for the survey year.
+#'
+#' @return list
+#' @references
+#' Prydz, E.B., D. Jolliffe, C. Lakner, D.G. Mahler, P. Sangraula. 2019.
+#' "[National Accounts Data used in Global Poverty Measurement](http://documents1.worldbank.org/curated/en/664751553100573765/pdf/135460-WP-PUBLIC-Disclosed-3-21-2019.pdf)".
+#' Global Poverty Monitoring Technical Note 8.
+#' World Bank, Washington, DC.
+#' @keywords internal
+select_proxy <- function(survey_gdp,
+                         survey_pce,
+                         ref_gdp,
+                         ref_pce,
+                         region_code) {
+
+  # If Sub-Saharan Africa, OR
+  # if other region but but PCE is NA, then use GDP
+
+  if (region_code == "SSA" || anyNA(c(survey_pce, ref_pce)))  {
+    if (length(survey_gdp) == 1) {
+      proxy <- list(
+        svy_value1 = survey_gdp,
+        svy_value2 = NULL,
+        ref_value  = ref_gdp
+      )
+    } else {
+      proxy <- list(
+        svy_value1 = survey_gdp[1],
+        svy_value2 = survey_gdp[2],
+        ref_value  = ref_gdp
+      )
+    }
+  } else {
+    # For other countries, use PCE if available
+      if (length(survey_pce) == 1) {
+        proxy <- list(
+          svy_value1 = survey_pce,
+          svy_value2 = NULL,
+          ref_value  = ref_pce
+        )
+      } else {
+        proxy <- list(
+          svy_value1  = survey_pce[1],
+          svy_value2  = survey_pce[2],
+          ref_value   = ref_pce
+        )
+      }
+  }
+  return(proxy)
+}
