@@ -153,35 +153,133 @@ select_proxy <- function(survey_gdp,
   # If Sub-Saharan Africa, OR
   # if other region but but PCE is NA, then use GDP
 
-  if (region_code == "SSA" || anyNA(c(survey_pce, ref_pce)))  {
-    if (length(survey_gdp) == 1) {
-      proxy <- list(
-        svy_value1 = survey_gdp,
-        svy_value2 = NULL,
-        ref_value  = ref_gdp
-      )
-    } else {
-      proxy <- list(
-        svy_value1 = survey_gdp[1],
-        svy_value2 = survey_gdp[2],
-        ref_value  = ref_gdp
-      )
-    }
+  if (unique(region_code) == "SSA" || anyNA(c(survey_pce, ref_pce)))  {
+    proxy <- list(
+      svy_value  = survey_gdp,
+      ref_value  = unique(ref_gdp)
+    )
   } else {
-    # For other countries, use PCE if available
-      if (length(survey_pce) == 1) {
-        proxy <- list(
-          svy_value1 = survey_pce,
-          svy_value2 = NULL,
-          ref_value  = ref_pce
-        )
-      } else {
-        proxy <- list(
-          svy_value1  = survey_pce[1],
-          svy_value2  = survey_pce[2],
-          ref_value   = ref_pce
-        )
-      }
+    proxy <- list(
+      svy_value = survey_pce,
+      ref_value  = unique(ref_pce)
+    )
   }
   return(proxy)
 }
+
+
+#' get weights from survey year to reference year
+#'
+#' @param ref_year numeric: reference year
+#' @param svy_years numeric: survey years. Length either 1 or 2
+#'
+#' @return numeric vector with both weights that sum up to 1
+#' @export
+distance_weight <- function(ref_year, svy_years) {
+
+  if (length(svy_years) == 1) {
+    return(1)
+  } else {
+
+    svy_year1 <- svy_years[[1]]
+    svy_year2 <- svy_years[[2]]
+    ref_year  <- unique(ref_year)
+    stopifnot({
+      length(ref_year) == 1
+    })
+
+    weight1 <- (svy_year2 - ref_year)/(svy_year2 - svy_year1)
+    weight2 <- 1 - weight1
+    return(c(weight1, weight2))
+  }
+}
+
+
+#' Find whether svy growth and nac growth go in the same direction
+#'
+#' @param survey_mean1 numeric: value of survey mean in year 1
+#' @param survey_mean2 numeric: value of survey mean in year 2
+#' @param svy_value1 numeric: value of national accounts in survey year 1
+#' @param svy_value2 numeric: value of national accounts in survey year 2
+#' @param ref_value numeric: value  of national accounts in reference year
+#'
+#' @return logical
+#' @export
+is_same_direction_interpolated <- function(survey_mean1,
+                                           survey_mean2,
+                                           svy_value1,
+                                           svy_value2,
+                                           ref_value) {
+
+  im <- is_monotonic(x1 = svy_value1, x2 = svy_value2, r = ref_value)
+  if (im) {
+    ism <- is_same_direction(x = c(svy_value1, svy_value2),
+                             y = c(survey_mean1, survey_mean2))
+    if (ism) {
+      return(TRUE)
+    } else {
+      return(FALSE)
+    }
+  } else {
+    return(FALSE)
+  }
+}
+
+
+#' is_monotonic
+#' @param x1 numeric: Value for the first year.
+#' @param x2 numeric: Value for the second year.
+#' @param r numeric: Value for the request year.
+#' @return logical
+#' @noRd
+is_monotonic <- function(x1, x2, r) {
+  ((r - x1) * (x2 - r)) > 0
+}
+
+
+#' is_same_direction
+#' @param x numeric: A vector with values to compare.
+#' @param y numeric: A vector with values to compare.
+#' @return logical
+#' @noRd
+is_same_direction <- function(x, y) {
+  (x[2] - x[1]) * (y[2] - y[1]) > 0
+}
+
+
+
+#' is this lineup year to interpolate?
+#'
+#' @param x numric: vector with survey years
+#'
+#' @return logical
+#' @export
+is_to_interpolate <- function(x) {
+
+  length(x) == 2
+
+}
+
+
+
+#' estimate reference year mean when interpolation in the same direction
+#'
+#' @param survey_mean1 numeric: value of survey mean in year 1
+#' @param survey_mean2 numeric: value of survey mean in year 2
+#' @param svy_value1 numeric: value of national accounts in survey year 1
+#' @param svy_value2 numeric: value of national accounts in survey year 2
+#' @param ref_value numeric: value  of national accounts in reference year
+#'
+#' @return numeric vector of length 1
+#' @export
+est_ref_mean <- function(survey_mean1,
+                         survey_mean2,
+                         svy_value1,
+                         svy_value2,
+                         ref_value) {
+
+  (survey_mean2 - survey_mean1) *
+    ((ref_value - svy_value1)/(svy_value2 - svy_value1)) + survey_mean1
+
+}
+
