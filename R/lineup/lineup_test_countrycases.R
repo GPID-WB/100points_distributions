@@ -15,71 +15,13 @@ dt_ref_mean_pred <- qs::qread("data/dt_ref_mean_pred.qs")
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# extrapolation   ---------
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-ct <- "AGO"
-yr <- 1990
-pl <- 2.15
-
-# Filtered lineup mean
-
-flm <- filter2list(dt_ref_mean_pred, country_code == ct & reporting_year == yr)
-
-# fileteres svy nac data
-
-fnac <- filter2list(du, country_code == ct & surveyid_year %in% flm$surveyid_year)
-
-# append lists with all metadata
-mtdt <- append(flm, fnac)
-
-# load data
-
-# sdt <- pmap(.l = mtdt,
-#             .f = \(...) {
-#               l <- list(...)
-#               x <- pipload::pip_load_cache(cache_id = l$cache_id)
-#             }
-#             )
-
-
-sdt <- pipload::pip_load_cache(cache_id = mtdt$cache_id)
-
-proxy <- select_proxy(survey_gdp  = mtdt$svy_gdp,
-                      survey_pce  = mtdt$svy_pce,
-                      ref_gdp     = mtdt$reporting_gdp,
-                      ref_pce     = mtdt$reporting_pce,
-                      region_code = mtdt$region_code)
-
-
-sdt[, welfare_lnp := welfare_ppp * (proxy$ref_value/proxy$svy_value1)
-    ][,
-      poor := welfare_lnp < pl]
-
-waldo::compare(
-  x = sdt[, stats::weighted.mean(welfare_lnp, weight)],
-  y = mtdt$predicted_mean_ppp,
-  tolerance = 1e-12
-)
-
-
-
-pip <- pipr::get_stats(ct, yr, fill_gaps = TRUE)
-
-waldo::compare(
-  sdt[, stats::weighted.mean(poor, weight)],
-  pip$headcount,
-  tolerance = 1e-12
-)
-
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# Interpolation   ---------
+# Interpolation adn extrapolation  ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
 ct <- "AGO"
 yr <- 1990
+yr <- 2008
 yr <- 2004
 pl <- 2.15
 
@@ -211,6 +153,39 @@ waldo::compare(
   tolerance = 1e-12
 )
 
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# save and keep important variables   ---------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+sdt <- sdt[,
+           c("welfare_lnp", "weight", "area", "survey_year")
+           ][,
+             year := yr]
+
+
+
+if (interpolate) {
+
+  if (same_direction)  {
+    sme <- "int_same"
+  } else {
+    sme <- "int_diverging"
+  }
+
+} else {
+  sme <- "ext"
+}
+
+file_name <- paste(ct,yr, sme, sep = "_")
+
+path <- "data/test" |>
+  fs::path(file_name, ext = "dta")
+
+haven::write_dta(sdt, path)
+
+
+fs::dir_copy("data/test", tdirp, overwrite = TRUE)
 
 
 
