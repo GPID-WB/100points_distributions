@@ -322,7 +322,9 @@ is_growth_same_sign <- function(x, y) {
 #' @export
 is_to_interpolate <- function(x) {
 
-  length(x) %% 2 == 0
+  x |>
+    unique() |>
+    length() %% 2 == 0
 
 }
 
