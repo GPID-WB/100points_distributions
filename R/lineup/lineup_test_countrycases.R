@@ -56,7 +56,7 @@ if (interpolate) {
     survey_mean2 = mtdt$survey_mean_ppp[[2]],
     svy_value1   = proxy$svy_value[[1]],
     svy_value2   = proxy$svy_value[[2]],
-    ref_value    =  proxy$ref_value)
+    ref_value    = proxy$ref_value)
 }
 
 
@@ -121,7 +121,7 @@ for (i in seq_along(mtdt$survey_year)) {
   svy_pop <- x[, sum(weight, na.rm = TRUE)]
   x[,
     # adjust to WDI population
-    weight := weight * (ref_pop/svy_pop)
+    weight := weight * (mtdt$reporting_pop[[i]]/svy_pop)
     ][,
       # adjust by distance
       weight := weight * mtdt$distance_weight[[i]]
@@ -138,7 +138,7 @@ sdt <- rbindlist(ld, use.names = TRUE, fill = TRUE)
 waldo::compare(
   x = sdt[,
           stats::weighted.mean(welfare_lnp, weight),
-          by = "cache_id"][, V1],
+          by = "survey_year"][, V1],
   y = mtdt$predicted_mean_ppp,
   tolerance = 1e-12
 )
@@ -179,10 +179,27 @@ if (interpolate) {
 
 file_name <- paste(ct,yr, sme, sep = "_")
 
-path <- "data/test" |>
-  fs::path(file_name, ext = "dta")
+path <- tdirp |>
+  fs::path(file_name)
 
-haven::write_dta(sdt, path)
+path |>
+  fs::path(ext = "dta") |>
+  haven::write_dta(data = sdt, path = _)
+
+path |>
+  fs::path(ext = "fst") |>
+  fst::write_fst(data = sdt, path = _)
+
+
+
+dta_file <-
+  fs::dir_ls("data/test") |>
+  fs::path_ext_remove()
+
+dta_file |>
+  fs::path(ext = "dta") |>
+  map(haven::read_dta) |>
+  walk2(fs::path(dta_file, ext = "fst"), fst::write_fst)
 
 
 fs::dir_copy("data/test", tdirp, overwrite = TRUE)

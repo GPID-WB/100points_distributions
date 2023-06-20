@@ -177,21 +177,85 @@ select_proxy <- function(survey_gdp,
 #' @export
 distance_weight <- function(ref_year, svy_years) {
 
-  if (length(svy_years) == 1) {
+  # early return
+  l_sy <- length(svy_years)
+  if (l_sy == 1) {
     return(1)
-  } else {
+  }
 
-    svy_year1 <- svy_years[[1]]
-    svy_year2 <- svy_years[[2]]
-    ref_year  <- unique(ref_year)
-    stopifnot({
-      length(ref_year) == 1
-    })
+  # check reference year is unique
+  ref_year  <- unique(ref_year)
+  stopifnot(exprs = {
+    length(ref_year) == 1
+    l_sy %% 2 == 0
+  })
+
+  x <- matrix(svy_years, nrow = 2)
+
+  wt <- vector(mode   = "numeric",
+               length = l_sy)
+
+  a <- c(1,2)
+  for (i in seq_along(x[1, ])) {
+    svy_year1 <- x[1, i]
+    svy_year2 <- x[2, i]
 
     weight1 <- (svy_year2 - ref_year)/(svy_year2 - svy_year1)
     weight2 <- 1 - weight1
-    return(c(weight1, weight2))
+    wt[a] <- c(weight1, weight2)
+    a <-  a + 2
   }
+
+  return(wt)
+
+}
+
+
+#' Is growth from survyes the same of NAC
+#'
+#' checks growth in the survey mean between the two surveys is of the same sign
+#' as (1) the growth in national accounts from the first survey to the reference
+#' year, and (2) from the reference year to the second survey.
+#'
+#' @param svy_means numeric: vector of survey means
+#' @param svy_nac   numeric: vector of National Accounts values
+#' @param ref_nac   numeric: vector of national account value in reference year
+#'
+#' @return logical vector
+#' @export
+is_same_direction <- function(svy_means,
+                              svy_nac,
+                              ref_nac) {
+
+  # early return
+  l_sm <- length(svy_means)  # survey mean
+  l_nv <- length(svy_nac)    # nac value
+  if (l_sm == 1) {
+    return(FALSE)
+  }
+
+  # check reference year is unique
+  ref_nac  <- unique(ref_nac)
+  stopifnot(exprs = {
+    length(ref_nac) == 1
+    length(l_nv) == length(l_sm)
+    l_sm %% 2 == 0
+  })
+
+  x <- matrix(svy_means, nrow = 2)
+  y <- matrix(svy_nac, nrow = 2)
+
+  sdir <- vector(mode   = "logical",
+               length = ncol(x))
+
+  for (i in seq_along(x[1, ])) {
+    sdir[i] <- is_growth_same_direction(survey_mean1 = x[1, i],
+                                        survey_mean2 = x[2, i],
+                                        svy_value1   = y[1, i],
+                                        svy_value2   = y[2, i],
+                                        ref_value    = ref_nac)
+  }
+  return(sdir)
 }
 
 
@@ -205,15 +269,16 @@ distance_weight <- function(ref_year, svy_years) {
 #'
 #' @return logical
 #' @export
-is_same_direction_interpolated <- function(survey_mean1,
-                                           survey_mean2,
-                                           svy_value1,
-                                           svy_value2,
-                                           ref_value) {
+is_growth_same_direction <- function(survey_mean1,
+                                     survey_mean2,
+                                     svy_value1,
+                                     svy_value2,
+                                     ref_value) {
 
   im <- is_monotonic(x1 = svy_value1, x2 = svy_value2, r = ref_value)
+
   if (im) {
-    ism <- is_same_direction(x = c(svy_value1, svy_value2),
+    ism <- is_growth_same_sign(x = c(svy_value1, svy_value2),
                              y = c(survey_mean1, survey_mean2))
     if (ism) {
       return(TRUE)
@@ -226,7 +291,8 @@ is_same_direction_interpolated <- function(survey_mean1,
 }
 
 
-#' is_monotonic
+#' is_monotonic makes sure that the reference year is in between the survey
+#' years
 #' @param x1 numeric: Value for the first year.
 #' @param x2 numeric: Value for the second year.
 #' @param r numeric: Value for the request year.
@@ -237,12 +303,12 @@ is_monotonic <- function(x1, x2, r) {
 }
 
 
-#' is_same_direction
+#' is_growth_same_sign
 #' @param x numeric: A vector with values to compare.
 #' @param y numeric: A vector with values to compare.
 #' @return logical
 #' @noRd
-is_same_direction <- function(x, y) {
+is_growth_same_sign <- function(x, y) {
   (x[2] - x[1]) * (y[2] - y[1]) > 0
 }
 
@@ -256,13 +322,62 @@ is_same_direction <- function(x, y) {
 #' @export
 is_to_interpolate <- function(x) {
 
-  length(x) == 2
+  length(x) %% 2 == 0
 
 }
 
 
 
-#' estimate reference year mean when interpolation in the same direction
+#' same_dir_growth
+#'
+#' Estimate growth factor for each distribution when growth in means is of the
+#' same direction that growth of NACs to reference year.
+#'
+#'
+#' @param svy_means numeric: vector of survey means
+#' @param svy_nac   numeric: vector of National Accounts values
+#' @param ref_nac   numeric: vector of national account value in reference year
+#'
+#' @return numeric vector
+#' @export
+same_dir_growth <- function(svy_means,
+                            svy_nac,
+                            ref_nac) {
+
+  # early return
+  l_sm <- length(svy_means)  # survey mean
+  l_nv <- length(svy_nac)    # nac value
+
+  # check reference year is unique
+  ref_nac  <- unique(ref_nac)
+  stopifnot(exprs = {
+    length(ref_nac) == 1
+    length(l_nv) == length(l_sm)
+    l_sm %% 2 == 0
+  })
+
+  x <- matrix(svy_means, nrow = 2)
+  y <- matrix(svy_nac, nrow = 2)
+
+  gf <- vector(mode   = "numeric",
+              length = ncol(x))
+
+
+  a <- c(1,2)
+  for (i in seq_along(x[1, ])) {
+    gf[a] <- same_dir_growth_factor(survey_mean1 = x[1, i],
+                                    survey_mean2 = x[2, i],
+                                    svy_value1   = y[1, i],
+                                    svy_value2   = y[2, i],
+                                    ref_value    = ref_nac)
+    a <-  a + 2
+  }
+  return(gf)
+
+}
+
+
+#' growth factor when interpolation is in the same direction
 #'
 #' @param survey_mean1 numeric: value of survey mean in year 1
 #' @param survey_mean2 numeric: value of survey mean in year 2
@@ -272,14 +387,18 @@ is_to_interpolate <- function(x) {
 #'
 #' @return numeric vector of length 1
 #' @export
-est_ref_mean <- function(survey_mean1,
+same_dir_growth_factor <- function(survey_mean1,
                          survey_mean2,
                          svy_value1,
                          svy_value2,
                          ref_value) {
 
-  (survey_mean2 - survey_mean1) *
+  # estimated reference mean for both years
+  est_ref_mean <- (survey_mean2 - survey_mean1) *
     ((ref_value - svy_value1)/(svy_value2 - svy_value1)) + survey_mean1
+
+  # growth factor
+  est_ref_mean / c(survey_mean1, survey_mean2)
 
 }
 
