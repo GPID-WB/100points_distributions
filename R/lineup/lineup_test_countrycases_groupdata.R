@@ -8,9 +8,11 @@ source("R/lineup/db_utils.R")
 # Initial conditions   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+ct <- "COL"
 ct <- "IND"
 yr <- 2015
 yr <- 2020
+yr <- 2005
 yr <- 2014
 pl <- 2.15
 
@@ -211,7 +213,7 @@ waldo::compare(
   tolerance = 1e-12
 )
 
-
+#############
 sdt[,
     stats::weighted.mean(poor, weight),
     by = c("reporting_level", "survey_year", "imputation_id")
@@ -220,6 +222,32 @@ sdt[,
       ][,
         nw := mtdt$distance_weight
         ][, stats::weighted.mean(V1, nw),
+          keyby = c("reporting_level")
+          ]
+###############
+
+sdt[,
+    id := rowidv(.SD,
+                 cols = c("reporting_level", "survey_year", "imputation_id"))
+    ][,
+    .(
+      welfare_lnp = mean(welfare_lnp),
+      weight      = first(weight)
+    ),
+    by = c("reporting_level", "survey_year", "id")
+    ][,
+      # Poor status
+      poor := welfare_lnp < pl
+    ][,
+      stats::weighted.mean(poor, weight),
+      by = "reporting_level"][, V1]
+
+sdt[,
+    wmed := stats::weighted.mean(poor, weight),
+    by = c("reporting_level", "survey_year", "imputation_id")
+    ][, .SD[1],
+      keyby = c("reporting_level", "survey_year", "imputation_id")
+      ][, stats::weighted.mean(wmed, weight),
           keyby = c("reporting_level")
           ]
 
