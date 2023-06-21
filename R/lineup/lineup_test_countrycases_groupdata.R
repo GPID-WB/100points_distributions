@@ -186,11 +186,13 @@ for (i in seq_along(mtdt$cache_id)) {
                sum(weight, na.rm = TRUE),
                by = "imputation_id"][1, V1]
   x[,
-    # adjust to WDI population
-    weight := weight * (mtdt$reporting_pop[[i]]/svy_pop)
+    # Adjust weights
+    weight := weight *
+      (mtdt$reporting_pop[[i]]/svy_pop) * # adjust to WDI population
+      mtdt$distance_weight[[i]]         # adjust by distance to reference year
   ][,
-    # adjust by distance
-    weight := weight * mtdt$distance_weight[[i]]
+    # keep distance weight for inputed data
+    dist_weight := mtdt$distance_weight[[i]]
   ]
 
   ld[[i]] <- x
@@ -213,34 +215,31 @@ waldo::compare(
   tolerance = 1e-12
 )
 
-#############
-sdt[,
-    stats::weighted.mean(poor, weight),
-    by = c("reporting_level", "survey_year", "imputation_id")
-    ][, mean(V1),
-      keyby = c("reporting_level", "survey_year")
+
+# Urban/rural
+df <-
+  sdt[,
+      .(poor = stats::weighted.mean(poor, weight),
+        weight = sum(weight)),
+      keyby = c("reporting_level", "survey_year", "dist_weight", "imputation_id")
+    ][,
+      .(
+        poor   = mean(poor),
+        weight = first(weight)),
+      keyby = c("reporting_level", "survey_year", "dist_weight")
       ][,
-        nw := mtdt$distance_weight
-        ][, stats::weighted.mean(V1, nw),
-          keyby = c("reporting_level")
-          ]
-###############
+        .(poor   = stats::weighted.mean(poor, dist_weight),
+          weight = stats::weighted.mean(weight, dist_weight)),
+        keyby = c("reporting_level")
+      ]
 
-
-sdt[,
-    stats::weighted.mean(poor, weight),
-    by = "reporting_level"][, V1]
-
-
-
-pov <- sdt[,
-           stats::weighted.mean(poor, weight),
-           by = "reporting_level"][, V1] |>
-  c(sdt[,
-        stats::weighted.mean(poor, weight)]) |>
+pov <-
+  df[, poor] |>
+  # National
+  c(df[,
+       stats::weighted.mean(poor, weight)]) |>
   unique()
 
-pip[country_code == ct & year == yr, headcount, by = "reporting_level"]
 
 waldo::compare(
   pip[country_code == ct & year == yr, headcount],
@@ -248,6 +247,7 @@ waldo::compare(
   tolerance = 1e-12
 )
 
+# pip[country_code == ct & year == yr, headcount, by = "reporting_level"]
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # save    ---------
