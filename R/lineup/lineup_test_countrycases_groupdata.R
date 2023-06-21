@@ -226,31 +226,6 @@ sdt[,
           ]
 ###############
 
-sdt[,
-    id := rowidv(.SD,
-                 cols = c("reporting_level", "survey_year", "imputation_id"))
-    ][,
-    .(
-      welfare_lnp = mean(welfare_lnp),
-      weight      = first(weight)
-    ),
-    by = c("reporting_level", "survey_year", "id")
-    ][,
-      # Poor status
-      poor := welfare_lnp < pl
-    ][,
-      stats::weighted.mean(poor, weight),
-      by = "reporting_level"][, V1]
-
-sdt[,
-    wmed := stats::weighted.mean(poor, weight),
-    by = c("reporting_level", "survey_year", "imputation_id")
-    ][, .SD[1],
-      keyby = c("reporting_level", "survey_year", "imputation_id")
-      ][, stats::weighted.mean(wmed, weight),
-          keyby = c("reporting_level")
-          ]
-
 
 sdt[,
     stats::weighted.mean(poor, weight),
