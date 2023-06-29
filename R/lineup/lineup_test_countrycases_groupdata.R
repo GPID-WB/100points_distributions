@@ -9,10 +9,15 @@ source("R/lineup/db_utils.R")
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ct <- "COL"
+ct <- "AGO"
+ct <- "BGD"
+ct <- "CHN"
+ct <- "CHN"
 ct <- "IND"
 yr <- 2015
 yr <- 2020
-yr <- 2005
+yr <- 2007
+yr <- 2007
 yr <- 2014
 pl <- 2.15
 
@@ -23,7 +28,8 @@ pl <- 2.15
 
 if (!exists(x = "du")) source("R/lineup/svy_nac.R")
 
-if (!exists(x = "memload")) memload <- memoise::memoise(pipload::pip_load_cache)
+if (!exists(x = "memload")) memload <-
+  memoise::memoise(pipload::pip_load_cache)
 
 # This data is suuposed to be obtained within the pipeline, not afterwards
 
@@ -141,7 +147,7 @@ ld <- vector(mode = "list",
 
 for (i in seq_along(mtdt$cache_id)) {
   # NOTE: I should optimize the loading of the data so it is done only once.
-  x <-  memload(cache_id = mtdt$cache_id[[i]])
+  x <-  pipload::pip_load_cache(cache_id = mtdt$cache_id[[i]])
   setkey(x, reporting_level)
 
   # get synthetic vector for group data.
@@ -158,7 +164,8 @@ for (i in seq_along(mtdt$cache_id)) {
     x[, `:=`(
       area            = mtdt$reporting_level[[i]],
       reporting_level = mtdt$reporting_level[[i]],
-      survey_year     = mtdt$survey_year[[i]]
+      survey_year     = mtdt$survey_year[[i]],
+      imputation_id   = ""
       )]
     setnames(x, "welfare", "welfare_ppp")
   } else {
@@ -171,7 +178,11 @@ for (i in seq_along(mtdt$cache_id)) {
   ][,
     # Poor status
     poor := welfare_lnp < pl
-  ]
+  ][,
+    # number of imputations
+    n_imp := uniqueN(imputation_id),
+    by = survey_year
+    ]
 
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   ## adjust to population of reference year --------
@@ -188,8 +199,9 @@ for (i in seq_along(mtdt$cache_id)) {
   x[,
     # Adjust weights
     weight := weight *
-      (mtdt$reporting_pop[[i]]/svy_pop) * # adjust to WDI population
-      mtdt$distance_weight[[i]]         # adjust by distance to reference year
+      ((mtdt$reporting_pop[[i]]/svy_pop) * # adjust to WDI population
+      mtdt$distance_weight[[i]])  /      # adjust by distance to reference year
+      n_imp                           # Adjust by the number of imputations
   ][,
     # keep distance weight for inputed data
     dist_weight := mtdt$distance_weight[[i]]
@@ -215,35 +227,46 @@ waldo::compare(
   tolerance = 1e-12
 )
 
+sdt[,
+
+    lapply(.SD, weighted.mean, weight),
+    .SDcol = c("welfare_lnp", "poor"),
+    keyby = c("reporting_level",
+              "survey_year")]
+
+
 
 # Urban/rural
-df <-
+rururb <-
   sdt[,
-      .(poor = stats::weighted.mean(poor, weight),
-        weight = sum(weight)),
-      keyby = c("reporting_level", "survey_year", "dist_weight", "imputation_id")
-    ][,
-      .(
-        poor   = mean(poor),
-        weight = first(weight)),
-      keyby = c("reporting_level", "survey_year", "dist_weight")
+
+      lapply(.SD, weighted.mean, weight),
+      .SDcol = c("welfare_lnp", "poor"),
+      keyby = c("reporting_level")]
+
+nat <-
+  sdt[,
+
+      lapply(.SD, weighted.mean, weight),
+      .SDcol = c("welfare_lnp", "poor")
       ][,
-        .(poor   = stats::weighted.mean(poor, dist_weight),
-          weight = stats::weighted.mean(weight, dist_weight)),
-        keyby = c("reporting_level")
-      ]
+        reporting_level := "national"]
 
-pov <-
-  df[, poor] |>
-  # National
-  c(df[,
-       stats::weighted.mean(poor, weight)]) |>
-  unique()
+pov <- rbindlist(list(rururb, nat), use.names = TRUE)
 
+setnames(pov,
+         old = c("welfare_lnp", "poor"),
+         new = c("mean", "headcount"))
 
 waldo::compare(
   pip[country_code == ct & year == yr, headcount],
-  pov,
+  pov[, headcount],
+  tolerance = 1e-12
+)
+
+waldo::compare(
+  pip[country_code == ct & year == yr, mean],
+  pov[, mean],
   tolerance = 1e-12
 )
 
@@ -257,7 +280,13 @@ waldo::compare(
 ##  keep important variables --------
 
 sdt <- sdt[,
-           c("welfare_lnp", "weight", "reporting_level",  "area", "survey_year")
+           c("welfare_lnp",
+             "weight",
+             "reporting_level",
+             "area",
+             "survey_year",
+             "dist_weight",
+             "imputation_id")
 ][,
   year := yr]
 
@@ -293,8 +322,8 @@ file_name
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ## saving --------
 
-
-path <- tdirp |>
+tempdir <- fs::path("p:/03.pip/estimates/lineup")
+path <- tempdir |>
   fs::path(file_name)
 
 path |>
