@@ -1,18 +1,13 @@
 if (Sys.info()["user"] == "wb384996" &&
     Sys.info()["nodename"] == "WBGMSDDG001") {
 
-  dirs <- fs::dir_ls(path = "data/album/")
 
-  new_dirs <-
-    fs::path("p:/03.pip/estimates/percentiles",
-           fs::path_file(dirs)) |>
-    fs::dir_create()
+  new_dir <-
+    fs::path("p:/03.pip/estimates/percentiles")
 
-  walk2(dirs, new_dirs,
-        .f = \(x, y) {
-          fs::dir_copy(path = x,
-                       new_path = y,
-                       overwrite = FALSE)
-        })
+  fs::dir_copy(path = album_dir,
+               new_path = new_dir,
+               overwrite = TRUE)
 
 }
+
