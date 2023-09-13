@@ -41,6 +41,11 @@ poss_get_bin_dist <- purrr::possibly(.f = get_micro_dist,
 dr <- purrr::map(.x = fpf,
                  .f = poss_get_bin_dist)
 
+names(dr) <- names(fpf)
+# to test individual calls
+# dr2 <- purrr::map(.x = list(fpf$ALB_2016_income),
+#                   .f = get_micro_dist)
+
 # Problematic databases
 dr_err <-
   dr |>
@@ -56,6 +61,6 @@ dr <-
 # format and save data   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-walk(dr, fmt_sve, version = version)
+iwalk(dr, \(x, idx) fmt_sve(x, idx))
 
 # rd <- rbindlist(rd, use.names = TRUE)

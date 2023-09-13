@@ -10,11 +10,6 @@ source("R/init.R")
 # load all data and split   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-singles_dir <- fs::path("data/singles", version)
-album_dir <- fs::path("data/album", version)
-ext <- "qs"
-
-
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ## get file names --------
 

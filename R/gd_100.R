@@ -104,13 +104,16 @@ rd <-
                v <- vctrs[[id]]
 
                levels <- names(y)
-               map_df(.x = levels,
-                             .f = poss_get_gd_calcs,
-                             vctr = v,
-                             mean = y,
-                             id   = id)
+
+               map(.x   = levels,
+                   .f   = poss_get_gd_calcs,
+                   vctr = v,
+                   mean = y,
+                   id   = id) |>
+               rbindlist()
              })
 
+names(rd) <- names(vctrs)
 # Problematic databases
 rd_err <-
   rd |>
@@ -119,12 +122,21 @@ rd_err <-
 rd_err
 
 # Get rid of problematic data
-rd <- compact(rd)
+rd <-
+  compact(rd) |>
+  map(.f = ~{
+    .x[,
+      welfare_type := gsub("(.+_)([^_]+)$", "\\2", id)
+    ]
+  })
+
+
+
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # format and save data   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-walk(rd, fmt_sve, version = version)
+iwalk(rd, \(x, idx) fmt_sve(x, idx))
 
 # rd <- rbindlist(rd, use.names = TRUE)

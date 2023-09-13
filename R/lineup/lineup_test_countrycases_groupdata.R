@@ -9,16 +9,16 @@ source("R/lineup/db_utils.R")
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ct <- "COL"
-ct <- "AGO"
-ct <- "BGD"
 ct <- "CHN"
+ct <- "BGD"
+ct <- "AGO"
 ct <- "CHN"
 ct <- "IND"
-yr <- 2015
 yr <- 2020
-yr <- 2007
-yr <- 2007
 yr <- 2014
+yr <- 1990
+yr <- 2006
+yr <- 2016
 pl <- 2.15
 
 
@@ -197,12 +197,18 @@ for (i in seq_along(mtdt$cache_id)) {
                sum(weight, na.rm = TRUE),
                by = "imputation_id"][1, V1]
   x[,
-    # Adjust weights
-    weight := weight *
+    # Adjust weights by population and distance to
+    # reference year. These are frequency weights that sum up to population
+    frq_weight := weight *
       ((mtdt$reporting_pop[[i]]/svy_pop) * # adjust to WDI population
-      mtdt$distance_weight[[i]])  /      # adjust by distance to reference year
-      n_imp                           # Adjust by the number of imputations
+      mtdt$distance_weight[[i]])        # adjust by distance to reference year
+
   ][,
+    # Adjust by the number of imputations. These are NOT frequency weights
+    # because they do not up to population in each imputation and thus can't
+    # be use to estimated volatility (e.g., standard deviations)
+    weight := frq_weight / n_imp
+    ][,
     # keep distance weight for inputed data
     dist_weight := mtdt$distance_weight[[i]]
   ]
@@ -252,7 +258,9 @@ nat <-
       ][,
         reporting_level := "national"]
 
-pov <- rbindlist(list(rururb, nat), use.names = TRUE)
+pov <-
+  rbindlist(list(rururb, nat), use.names = TRUE) |>
+  unique()
 
 setnames(pov,
          old = c("welfare_lnp", "poor"),
@@ -285,8 +293,11 @@ sdt <- sdt[,
              "reporting_level",
              "area",
              "survey_year",
-             "dist_weight",
-             "imputation_id")
+             "frq_weight"
+             # ,
+             # "dist_weight",
+             # "imputation_id"
+             )
 ][,
   year := yr]
 

@@ -42,7 +42,7 @@ get_gd_calcs <- function(level, vctr, mean, id) {
   population <- vctr$population[[level]]
   mean       <- mean[[level]]
 
-  params <- get_gd_quantiles(welfare,
+  params <- wbpip:::get_gd_quantiles(welfare,
                              population,
                              complete = TRUE,
                              mean     = mean,
@@ -82,7 +82,7 @@ poss_get_gd_calcs <- purrr::possibly(.f = get_gd_calcs,
                                      otherwise = NULL)
 
 
-fmt_sve <- function(dt, version) {
+fmt_sve <- function(dt, id) {
   dt <- copy(dt)
   nvars <- c("country_code", "year", "welfare_type")
   id    <- unique(dt[, id])
@@ -95,9 +95,10 @@ fmt_sve <- function(dt, version) {
 
   # save
   # haven::write_dta(dt, fs::path("data/singles", id, ext = "dta"))
-  qs::qsave(dt, fs::path("data/singles", version, id, ext = "qs"))
-
+  fs::path(singles_dir, id, ext = ext) |>
+    qs::qsave(x = dt, file = _)
 }
+
 
 
 
@@ -118,15 +119,18 @@ get_micro_dist <- function(pl) {
 
   dt[,
      # get bins and total pop and welfare
-     `:=`(
-       bin = wbpip:::md_compute_bins(welfare_ppp,
-                                     weight,
-                                     nbins = nq,
-                                     output = "simple"),
-       tot_pop = sum(weight),
-       tot_wlf = sum(welfare_ppp*weight)
-     ),
+
+     bin := wbpip:::md_compute_bins(welfare_ppp,
+                                    weight,
+                                    nbins = nq,
+                                    output = "simple"),
      by = c("imputation_id", "reporting_level")
+  ][,
+    `:=`(
+      tot_pop = sum(weight),
+      tot_wlf = sum(welfare_ppp*weight)
+    ),
+    by = c("imputation_id", "reporting_level")
   ]
 
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -141,7 +145,7 @@ get_micro_dist <- function(pl) {
        quantile      <- max(welfare_ppp)
        list(avg_welfare, pop_share, welfare_share, quantile)
      },
-     by = .(imputation_id, reporting_level, bin)]
+     by = .(imputation_id, reporting_level, welfare_type, bin)]
 
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   ## Getting means --------
@@ -150,12 +154,12 @@ get_micro_dist <- function(pl) {
     dt[,
        # mean by impuration and bin
        lapply(.SD, mean),
-       by = .(imputation_id, reporting_level, bin),
+       by = .(imputation_id, reporting_level, welfare_type,  bin),
        .SDcols =  c("avg_welfare", "pop_share", "welfare_share", "quantile")
     ][,
       # mean by bin
       lapply(.SD, mean),
-      by = .(reporting_level, bin),
+      by = .(reporting_level, welfare_type, bin),
       .SDcols =  c("avg_welfare", "pop_share", "welfare_share", "quantile")
     ]
 
