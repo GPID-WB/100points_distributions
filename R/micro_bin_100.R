@@ -22,8 +22,11 @@ fpf <- pfw[, .(country_code,
 
 fpf[, `:=`(
   id = paste(country_code, reporting_year, welfare_type, sep = "_"),
-  version = version)
+  version = version,
+  wt_call = toupper(substr(welfare_type, 1, 3)))
   ]
+
+
 
 # Testing: here we have to include some code that allows the use to select
 # different countries, years, etc.
@@ -32,6 +35,7 @@ fpf[, `:=`(
 
 
 # fpf <- fpf[country_code %in% c("SOM", "COL") & surveyid_year == 2017]
+# fpf <- fpf[country_code %in% c("POL") & surveyid_year == 2004]
 
 fpf <- fpf |>
   split(by = "id")
@@ -42,6 +46,7 @@ dr <- purrr::map(.x = fpf,
                  .f = poss_get_bin_dist)
 
 names(dr) <- names(fpf)
+
 # to test individual calls
 # dr2 <- purrr::map(.x = list(fpf$ALB_2016_income),
 #                   .f = get_micro_dist)

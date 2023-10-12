@@ -110,9 +110,10 @@ get_micro_dist <- function(pl) {
   dt   <- pipload::pip_load_cache(pl$country_code,
                                   pl$surveyid_year,
                                   verbose = FALSE,
-                                  version = pl$version)
+                                  version = pl$version,
+                                  welfare_type = pl$wt_call)
 
-  setorder(dt, imputation_id, reporting_level, welfare_ppp, weight)
+  setorder(dt, imputation_id, reporting_level, welfare_type,  welfare_ppp, weight)
 
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   ## bins ant totals --------
@@ -124,13 +125,13 @@ get_micro_dist <- function(pl) {
                                     weight,
                                     nbins = nq,
                                     output = "simple"),
-     by = c("imputation_id", "reporting_level")
+     by = c("imputation_id", "reporting_level", "welfare_type")
   ][,
     `:=`(
       tot_pop = sum(weight),
       tot_wlf = sum(welfare_ppp*weight)
     ),
-    by = c("imputation_id", "reporting_level")
+    by = c("imputation_id", "reporting_level", "welfare_type")
   ]
 
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -145,16 +146,16 @@ get_micro_dist <- function(pl) {
        quantile      <- max(welfare_ppp)
        list(avg_welfare, pop_share, welfare_share, quantile)
      },
-     by = .(imputation_id, reporting_level, welfare_type, bin)]
+     by = .(imputation_id,  reporting_level, welfare_type,  bin)]
 
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   ## Getting means --------
 
   dt <-
     dt[,
-       # mean by impuration and bin
+       # mean by imputation and bin
        lapply(.SD, mean),
-       by = .(imputation_id, reporting_level, welfare_type,  bin),
+       by = .(imputation_id, reporting_level, welfare_type, bin),
        .SDcols =  c("avg_welfare", "pop_share", "welfare_share", "quantile")
     ][,
       # mean by bin
@@ -164,7 +165,10 @@ get_micro_dist <- function(pl) {
     ]
 
   dt[,
-     id := pl$id]
+     id := paste(pl$country_code,
+                 pl$reporting_year,
+                 welfare_type,
+                 sep = "_")]
 
   return(dt)
 }

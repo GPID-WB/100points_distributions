@@ -3,7 +3,7 @@
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #                   Load Libraries   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-pak::pak("PIP-Technical-team/wbpip@refactor_gd")
+# pak::pak("PIP-Technical-team/wbpip@refactor_gd")
 
 library(data.table)
 library(wbpip)
@@ -21,12 +21,13 @@ source("R/functions.R")
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #                   Initial parameters   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-nq       <- 100
+nq       <- 1000
 lorenz   <- NULL
 popshare <- seq(from = 1/nq, to = 1, by = 1/nq)
 version  <- "20230328_2011_02_02_PROD"
 version  <- "20230328_2017_01_02_PROD"
 version  <- "20230626_2017_01_02_TEST"
+version  <- "20230919_2017_01_02_PROD"
 # ppp_year <- py <- 2011
 ppp_year <- py <- version |>
   gsub("(.*)_([0-9]{4})(_.*)", "\\2", x = _) |>
