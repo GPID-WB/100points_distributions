@@ -45,7 +45,7 @@ dt[, mean_ppp :=  {
       x <- x/(365/12)
     }
    ][,
-      id := paste(country_code, surveyid_year, welfare_type, sep = "_")
+      id := paste(country_code, reporting_year, welfare_type, sep = "_")
     ]
 
 mean_ppp <-
@@ -80,7 +80,7 @@ fpf <- pfw[, .(country_code,
                welfare_type)]
 
 fpf[, `:=`(
-    id = paste(country_code, surveyid_year, welfare_type, sep = "_"),
+    id = paste(country_code, reporting_year, welfare_type, sep = "_"),
     version = version
   )
 ]
