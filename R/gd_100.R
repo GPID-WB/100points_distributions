@@ -1,3 +1,4 @@
+
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # project:       Create 100-point distribution for group data
 # Author:        Andres Castaneda
@@ -20,21 +21,107 @@ source("R/init.R")
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # load Aux data   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-aux <- pipfun::pip_merge_aux(c("cpi", "ppp", "gdm"))
+
+## PFW ------------
 
 pfw <- pipload::pip_load_aux("pfw") |>
-  {\(.) .[use_groupdata == 1 &
-            inpovcal  == 1]}()
+  fsubset(use_groupdata == 1 &
+            inpovcal  == 1) |>
+  fselect(country_code,
+          reporting_year,
+          survey_year,
+          surveyid_year,
+          survey_acronym,
+          welfare_type,
+          tosplit)
 
-aux_id <- attr(aux, "id")
-pfw_id <- pipfun::aux_ids("pfw")$pfw
 
-byv <- intersect(aux_id, pfw_id)
 
-# filter according to pfw
-dt <- merge(aux, pfw, byv)
 
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## CPI ------------
+cpi_var <- paste0("cpi", ppp_year)
+cpi <- pipload::pip_load_aux("cpi") |>
+  ftransform(cpi = get(cpi_var)) |>
+  fselect(country_code,
+          survey_year,
+          surveyid_year  = cpi_year,
+          reporting_level = cpi_data_level,
+          survey_acronym,
+          cpi)
+
+# |>
+#   funique(c("country_code", "reporting_year", "reporting_level", "cpi")) |>
+#   setorder(country_code, reporting_year, reporting_level) |>
+# # to merge with GDM
+#   ftransform(rep_level = rowid(country_code,
+#                                reporting_year))
+
+## PPP -------------------
+ppp <- pipload::pip_load_aux("ppp")
+ppp <- ppp |>
+  fsubset(ppp_year == py &
+            ppp_default_by_year == TRUE) |>
+  fselect(country_code,
+          reporting_level = ppp_data_level,
+          ppp) |>
+  setorder(country_code, reporting_level) |>
+  ftransform(rep_level = rowid(country_code))
+
+## GDM ---------------
+gdm <- pipload::pip_load_aux("gdm") |>
+  fselect(country_code,
+          survey_year,
+          surveyid_year,
+          welfare_type,
+          survey_mean_lcu,
+          distribution_type,
+          reporting_level = pop_data_level) |>
+  setorder(country_code, survey_year, surveyid_year, reporting_level) |>
+  ftransform(rep_level = rowid(country_code, survey_year))
+
+
+## merge aux data ----------------
+
+### CPI and PFW -----------
+cpi_pfw <-
+  joyn::merge(cpi, pfw,
+              by = c("country_code",
+                     "survey_year",
+                     "surveyid_year",
+                     "survey_acronym"),
+              keep = "inner",
+              reportvar = FALSE) |>  # There should not be "y"
+  setorder(country_code, survey_year, surveyid_year, reporting_level) |>
+  ftransform(rep_level = rowid(country_code, survey_year))
+
+### Add GDM --------------
+gdm_cpi_pfw <-
+  joyn::merge(gdm, cpi_pfw,
+              by = c("country_code",
+                     "survey_year",
+                     "surveyid_year",
+                     "rep_level",
+                     "welfare_type"),
+              match_type = "1:1") |>
+  # Use national cpi for for those values with NA in urban
+  fgroup_by(country_code, survey_year) |>
+  ftransform(cpi = fifelse(is.na(cpi) & report == "x",
+                           flag(cpi), cpi)
+  ) |>
+  fungroup() |>
+  fselect(-c(report))
+
+
+### Add PPP ------------------
+dt <-
+  joyn::merge(gdm_cpi_pfw, ppp,
+              by = c("country_code", "rep_level"),
+              match_type = "m:1",
+              # reportvar = FALSE,
+              keep = "left",
+              reportvar = FALSE) # should all match
+
+
 # deflate mean   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -52,7 +139,7 @@ mean_ppp <-
   dt[!is.na(mean_ppp)
   ][,  # keep no na data
     # keep important variables
-    c("id", "mean_ppp", "data_level")
+    c("id", "mean_ppp", "reporting_level")
   ] |>
   # create list of means and reporting level by id
   split(by = "id",
@@ -60,7 +147,7 @@ mean_ppp <-
   # convert data.table into vectors of means with reporting levels as names
   map(~{
     y        <- .x[, mean_ppp]
-    names(y) <- .x[, data_level]
+    names(y) <- .x[, reporting_level]
     attr(y,"label") <- NULL
     y
   })
@@ -76,7 +163,6 @@ fpf <- pfw[, .(country_code,
                surveyid_year,
                reporting_year,
                survey_year,
-               pop_domain,
                welfare_type)]
 
 fpf[, `:=`(

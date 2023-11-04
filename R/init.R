@@ -5,7 +5,7 @@
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # pak::pak("PIP-Technical-team/wbpip@refactor_gd")
 
-library(data.table)
+library(fastverse)
 library(wbpip)
 library(purrr)
 library(glue)
