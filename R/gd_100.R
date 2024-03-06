@@ -102,15 +102,26 @@ gdm_cpi_pfw <-
                      "surveyid_year",
                      "rep_level",
                      "welfare_type"),
-              match_type = "1:1") |>
-  # Use national cpi for for those values with NA in urban
-  fgroup_by(country_code, survey_year) |>
-  ftransform(cpi = fifelse(is.na(cpi) & report == "x",
-                           flag(cpi), cpi)
-  ) |>
-  fungroup() |>
-  fselect(-c(report))
+              match_type = "1:1")
 
+
+vars <- names(gdm_cpi_pfw) |>
+  copy()
+
+vars <- vars[vars %!in% c("country_code", "survey_year", "report")]
+
+
+# Use national cpi for for those values with NA in urban
+gdm_cpi_pfw[,
+            (vars) := lapply(.SD,
+                             \(x) {
+                               fifelse(is.na(x) & report == "x",
+                                       flag(x), x)
+                               }),
+            .SDcols = vars,
+            by = c("country_code", "survey_year")
+            ][,
+              report := NULL]
 
 ### Add PPP ------------------
 dt <-
@@ -159,7 +170,6 @@ mean_ppp <-
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 fpf <- pfw[, .(country_code,
-               year,
                surveyid_year,
                reporting_year,
                survey_year,
