@@ -21,7 +21,7 @@ if (!"lkups" %in% ls() || isTRUE(force)) {
   fs::dir_ls(data_dir, recurse = FALSE)
 }
 
-version  <- "20230919_2017_01_02_PROD"
+version  <- "20240326_2017_01_02_PROD"
 
 new_dir <-
   fs::path("p:/03.pip/estimates/1kbins_lineup", version) |>
