@@ -11,7 +11,7 @@ library(progressr)
 
 
 
-# pak::pak("PIP-Technical-Team/pipapi@DEV")
+# remotes::install_github("PIP-Technical-Team/pipapi@DEV")
 
 force <- TRUE
 
