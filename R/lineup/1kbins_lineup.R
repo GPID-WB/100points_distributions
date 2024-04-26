@@ -62,20 +62,18 @@ pls <- rt$new_pl
 
 countries <-
   countries |>
-  sort(decreasing = TRUE)
+  sort(decreasing = FALSE)
 
 n_cores <- floor((availableCores() - 1) / 2)
 plan(multisession)
-
-
 
 # countries <- c("HND", "PRY")
 # pls <- c(1:5)
 
 # Run by LInes with Future ---------
-
+force <- TRUE
 with_progress({
-  p <- progressor(steps = length(countries))
+  p <- progressor(steps = length(pls))
 
   future_walk(pls,
               \(pl){
@@ -90,7 +88,7 @@ with_progress({
                   new_dir |>
                   fs::path(nfile_name, ext = "dta")
 
-                if (!fs::file_exists(fst_file)) {
+                if (!fs::file_exists(fst_file) || force == TRUE) {
                   lt <- pipapi::pip(povline = pl,
                                    lkup = lkup,
                                    fill_gaps = TRUE)
@@ -144,6 +142,20 @@ new_dir |>
 
 toc <- tictoc::toc()
 toc
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

@@ -30,6 +30,8 @@ version  <- "20230328_2017_01_02_PROD"
 version  <- "20230626_2017_01_02_TEST"
 version  <- "20230919_2017_01_02_PROD"
 version  <- "20230919_2011_02_02_PROD"
+version  <- "20240326_2011_02_02_PROD"
+version  <- "20240326_2017_01_02_PROD"
 # ppp_year <- py <- 2011
 ppp_year <- py <- version |>
   gsub("(.*)_([0-9]{4})(_.*)", "\\2", x = _) |>
