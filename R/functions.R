@@ -172,3 +172,26 @@ get_micro_dist <- function(pl) {
 
   return(dt)
 }
+
+
+get_synth_level <- function(level,
+                            vctr,
+                            mean,
+                            pop) {
+
+  welfare <- vctr$welfare[[level]]
+  population <- vctr$population[[level]]
+  mean <- mean[[level]]
+  pop <- pop[[level]]
+
+  wf <- wbpip:::sd_create_synth_vector(
+    welfare = welfare,
+    population = population,
+    mean = mean,
+    pop = pop,
+    nobs = 100
+  )
+
+  return(wf)
+
+}
