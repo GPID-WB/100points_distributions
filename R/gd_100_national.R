@@ -25,8 +25,8 @@ source("R/init_national.R")
 
 ## PFW ------------
 pfw <- pipload::pip_load_aux("pfw") |>
-  fsubset(use_groupdata == 1 &
-            inpovcal  == 1) |>
+  fsubset(use_groupdata == 1 & # filter for grouped data
+            inpovcal  == 1) |> # do I need to keep this?
   fselect(country_code,
           reporting_year,
           survey_year,
@@ -172,7 +172,7 @@ dt_ids <-dt[,
 pop_list <-
   joyn::merge(pop, dt_ids,
               reportvar = FALSE,
-              keep = 'right') |> # assuming that these are the data we need
+              keep = 'right') |>
   unique() |>
   split(by=c('id'),
         keep.by = FALSE) |>
@@ -189,8 +189,7 @@ pop_list <-
 # !!!! CHN, IND, IDN filter ----
 countries <- c("CHN", "IND", "IDN")
 
-fpf <- pfw[country_code %in% countries
-           & survey_year < 2021, # temporary because CHN 2021 does not have reporting_year
+fpf <- pfw[country_code %in% countries, # temporary
            .(country_code,
              surveyid_year,
              reporting_year,
@@ -204,43 +203,48 @@ fpf[, `:=`(
 )
 ]
 
+issues <- c('CHN_2021_consumption', 'QAT_2017_income') # need to think how to filter for that
+fpf <- fpf[id %!in% issues,]
+
 pl <- split(fpf, by = "id")
 
 vctrs <- map(pl, gd_pop_wlf)
 names(vctrs) <- fpf[, id]
 
 
+
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 6. Get distributions at national level   ----------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-outer_wf <- map(
+tic()
+# Map
+gd_synth_bins <- map(
   .x = names(vctrs),
   .f = ~{
-    # Extract details for the current id
     id <- .x
     mean_id <- mean_ppp[[id]]
     vctr_id <- vctrs[[id]]
     pop_table_id <- pop_list[[id]]
 
-    # Get the names of the levels
-    levels <- names(mean_id)
 
-    # Map over levels and apply the get_synth_level function
-    wf_id <- purrr::map(
-      .x = levels,
-      .f = ~get_synth_level(
-        level = .x,
-        vctr = vctr_id,
-        mean = mean_id,
-        pop = pop_table_id
-      )
-    ) |>
-      rbindlist() |>
-      setorder(welfare)
+    wf_id <- create_synth_bins(
+      vctr = vctr_id,
+      mean = mean_id,
+      pop = pop_table_id,
+      nbins = 100
+    )
+
+    return(wf_id)
   }
 )
+toc()
+# Set names for the list of processed data tables
+names(gd_synth_bins) <- names(vctrs)
+
 
 # Assign the names from vctrs to the outer_wf result
 names(outer_wf) <- names(vctrs)
+
+
 

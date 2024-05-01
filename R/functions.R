@@ -174,24 +174,78 @@ get_micro_dist <- function(pl) {
 }
 
 
-get_synth_level <- function(level,
-                            vctr,
-                            mean,
-                            pop) {
 
-  welfare <- vctr$welfare[[level]]
-  population <- vctr$population[[level]]
-  mean <- mean[[level]]
-  pop <- pop[[level]]
+create_synth_bins <- function(vctr,
+                              mean,
+                              pop,
+                              nbins) {
 
-  wf <- wbpip:::sd_create_synth_vector(
-    welfare = welfare,
-    population = population,
+  # Get synthetic distribution
+  dt <- get_synth_level_rbind(
+    vctr = vctr,
     mean = mean,
-    pop = pop,
-    nobs = 100
+    pop = pop
   )
 
-  return(wf)
+  # Compute bins, tot_pop and tot_wfl
+  dt[, bin := wbpip:::md_compute_bins(welfare,
+                                      weight,
+                                      nbins = nbins,
+                                      output = "simple")]
+  dt[, `:=`(tot_pop = sum(weight, na.rm = TRUE),
+            tot_wlf = sum(welfare * weight, na.rm = TRUE))]
+
+  # Compute measures
+  dt[, c("avg_welfare", "pop_share", "welfare_share", "quantile") := {
+    avg_welfare   <- weighted.mean(welfare, weight, na.rm = TRUE)
+    pop_share     <- sum(weight, na.rm = TRUE) / tot_pop
+    welfare_share <- sum(welfare * weight, na.rm = TRUE) / tot_wlf
+    quantile      <- max(welfare, na.rm = TRUE)
+    .(avg_welfare, pop_share, welfare_share, quantile)
+  }, by = .(bin)]
+
+  # Mean by bin
+  dt <- dt[,
+           lapply(.SD, mean, na.rm = TRUE),
+           by = .(bin),
+           .SDcols = c("avg_welfare", "pop_share", "welfare_share", "quantile")]
+
+  return(dt)
+}
+
+get_synth_level_rbind <- function(vctr,
+                                  mean,
+                                  pop) {
+
+  # Extract levels
+  levels <- names(mean)
+
+  # Map to each level
+  synth_level <- purrr::map(
+    levels,
+    ~{
+      level <- .x
+      # Extract data for the current level
+      welfare <- vctr$welfare[[level]]
+      population <- vctr$population[[level]]
+      mean_level <- mean[[level]]
+      pop_level <- pop[[level]]
+
+      # Create synthetic vector for this level
+      synth_vector_level <- wbpip:::sd_create_synth_vector(
+        welfare = welfare,
+        population = population,
+        mean = mean_level,
+        pop = pop_level
+      )
+      return(synth_vector_level)
+    }
+  )
+
+  # Combine all the results into a single data.table
+  combined_results <- purrr::reduce(synth_level, rbind)|>
+    setorder(welfare)
+
 
 }
+

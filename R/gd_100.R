@@ -168,8 +168,10 @@ mean_ppp <-
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Get population and welfare vctrs for Group data   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+issues <- c('CHN_2021_consumption', 'QAT_2017_income')
 
-fpf <- pfw[, .(country_code,
+
+fpf <- pfw[,.(country_code, #temporary just to run the code
                surveyid_year,
                reporting_year,
                survey_year,
@@ -180,6 +182,8 @@ fpf[, `:=`(
     version = version
   )
 ]
+
+fpf <- fpf[id %!in% issues,]
 
 # fpf <- fpf[1:5]
 # lf <- as.list(fpf)
@@ -210,11 +214,13 @@ rd <-
              })
 
 names(rd) <- names(vctrs)
+
 # Problematic databases
 rd_err <-
   rd |>
   keep(is.null) |>
   names()
+
 rd_err
 
 # Get rid of problematic data
@@ -225,8 +231,6 @@ rd <-
       welfare_type := gsub("(.+_)([^_]+)$", "\\2", id)
     ]
   })
-
-
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
