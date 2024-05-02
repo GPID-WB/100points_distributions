@@ -10,7 +10,7 @@
 # References:
 #
 #
-# Output:             data.table with distribution
+# Output:            list of data.tables by ids
 # Notes:
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -19,8 +19,6 @@
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 source("R/init.R")
 
-# Filter for specific countries  ----
-#countries <- c("CHN", "IND", "IDN")
 
 # 2. GROUPED DATA ----
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -282,6 +280,7 @@ fpf[, `:=`(
   wt_call = toupper(substr(welfare_type, 1, 3)))
 ]
 
+# !!!!! REMOVE IF RUNNING FOR ALL DATA ----
 fpf <- fpf[reporting_year == 2023,]
 
 fpf <- fpf |>
