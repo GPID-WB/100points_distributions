@@ -36,8 +36,6 @@ pfw <- pipload::pip_load_aux("pfw") |>
           tosplit)
 
 
-
-
 ## CPI ------------
 cpi_var <- paste0("cpi", ppp_year)
 cpi <- pipload::pip_load_aux("cpi") |>
@@ -168,9 +166,6 @@ mean_ppp <-
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Get population and welfare vctrs for Group data   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-issues <- c('CHN_2021_consumption', 'QAT_2017_income')
-
-
 fpf <- pfw[,.(country_code, #temporary just to run the code
                surveyid_year,
                reporting_year,
@@ -183,7 +178,7 @@ fpf[, `:=`(
   )
 ]
 
-fpf <- fpf[id %!in% issues,]
+
 
 # fpf <- fpf[1:5]
 # lf <- as.list(fpf)

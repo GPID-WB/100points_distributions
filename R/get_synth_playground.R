@@ -313,6 +313,76 @@ gd_synth_bins <- map(
   }
 )
 
-# Set names for the list of processed data tables
-names(gd_synth_bins) <- names(vctrs)
+
+
+
+
+
+
+fpf[, ]
+
+
+# 6. Micro data procedure ----
+## Load single dt
+dt   <- pipload::pip_load_cache('IND',
+                                2019,
+                                verbose = FALSE,
+                                version = version,
+                                welfare_type = 'CON')
+
+setorder(dt, imputation_id, welfare_type,
+         welfare_ppp, weight)
+
+## Exit if dt has national
+unique_levels <- unique(dt$reporting_level)
+if ('national' %in% unique_levels) {
+  return(NULL)
+}
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## bins ant totals --------
+
+dt[,
+   # get bins and total pop and welfare
+   bin := wbpip:::md_compute_bins(welfare_ppp,
+                                  weight,
+                                  nbins = nq,
+                                  output = "simple"),
+   by = c("imputation_id", "welfare_type") # remove reporting level
+][,
+  `:=`(
+    tot_pop = sum(weight),
+    tot_wlf = sum(welfare_ppp*weight)
+  ),
+  by = c("imputation_id", "welfare_type") # remove reporting level
+]
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## main measures --------
+
+dt[,
+   # get avg wlf, pop and wlf shared
+   c("avg_welfare", "pop_share", "welfare_share", "quantile") := {
+     avg_welfare   <-  weighted.mean(welfare_ppp, weight)
+     pop_share     <- sum(weight)/tot_pop
+     welfare_share <- sum(welfare_ppp*weight)/tot_wlf
+     quantile      <- max(welfare_ppp)
+     list(avg_welfare, pop_share, welfare_share, quantile)
+   },
+   by = .(imputation_id, welfare_type,  bin)]
+
+dt <-
+  dt[,
+     # mean by imputation and bin
+     lapply(.SD, mean),
+     by = .(imputation_id, welfare_type, bin),
+     .SDcols =  c("avg_welfare", "pop_share", "welfare_share", "quantile")
+  ][,
+    # mean by bin
+    lapply(.SD, mean),
+    by = .(welfare_type, bin),
+    .SDcols =  c("avg_welfare", "pop_share", "welfare_share", "quantile")
+  ]
+
 

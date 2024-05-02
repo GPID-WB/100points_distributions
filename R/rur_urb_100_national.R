@@ -11,20 +11,24 @@
 #
 #
 # Output:             data.table with distribution
-# Notes: This is a draft of the final pipeline, it calculates
-# distributions for CHN, IND and IDN before 2021 only.
+# Notes:
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 1. Run initial conditions   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-source("R/init_national.R")
+source("R/init.R")
+
+# Filter for specific countries  ----
+# countries <- c("CHN")
+
+# 2. GROUPED DATA ----
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# 2. Load Aux data   ---------
+# 2.1 Load Aux data   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## PFW ------------
-pfw <- pipload::pip_load_aux("pfw") |>
+pfw_gd <- pipload::pip_load_aux("pfw") |>
   fsubset(use_groupdata == 1 & # filter for grouped data
             inpovcal  == 1) |> # do I need to keep this?
   fselect(country_code,
@@ -81,11 +85,11 @@ pop <- pipload::pip_load_aux("pop") |>
   ftransform(rep_level = rowid(country_code, reporting_year))
 
 
-# 3. Merge aux data ----------------
+# 2.2 Merge aux data ----------------
 
 ## CPI and PFW -----------
-cpi_pfw <-
-  joyn::merge(cpi, pfw,
+cpi_pfw_gd <-
+  joyn::merge(cpi, pfw_gd,
               by = c("country_code",
                      "survey_year",
                      "surveyid_year",
@@ -96,8 +100,8 @@ cpi_pfw <-
   ftransform(rep_level = rowid(country_code, survey_year))
 
 ## Add GDM --------------
-gdm_cpi_pfw <-
-  joyn::merge(gdm, cpi_pfw,
+gdm_cpi_pfw_gd <-
+  joyn::merge(gdm, cpi_pfw_gd,
               by = c("country_code",
                      "survey_year",
                      "surveyid_year",
@@ -106,13 +110,13 @@ gdm_cpi_pfw <-
               match_type = "1:1")
 
 
-vars <- names(gdm_cpi_pfw) |>
+vars <- names(gdm_cpi_pfw_gd) |>
   copy()
 
 vars <- vars[vars %!in% c("country_code", "survey_year", "report")]
 
 # Use national cpi for for those values with NA in urban
-gdm_cpi_pfw[,
+gdm_cpi_pfw_gd[,
             (vars) := lapply(.SD,
                              \(x) {
                                fifelse(is.na(x) & report == "x",
@@ -124,8 +128,8 @@ gdm_cpi_pfw[,
   report := NULL]
 
 ## Add PPP ------------------
-dt <-
-  joyn::merge(gdm_cpi_pfw, ppp,
+dt_gd <-
+  joyn::merge(gdm_cpi_pfw_gd, ppp,
               by = c("country_code", "rep_level"),
               match_type = "m:1",
               # reportvar = FALSE,
@@ -135,7 +139,7 @@ dt <-
 ## Deflate mean   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-dt[, mean_ppp :=  {
+dt_gd[, mean_ppp :=  {
   x <- deflate_welfare_mean(survey_mean_lcu,
                             ppp,
                             cpi)
@@ -147,7 +151,7 @@ dt[, mean_ppp :=  {
 
 
 mean_ppp <-
-  dt[!is.na(mean_ppp)
+  dt_gd[!is.na(mean_ppp)
   ][,  # keep no na data
     # keep important variables
     c("id", "mean_ppp", "reporting_level")
@@ -164,13 +168,13 @@ mean_ppp <-
   })
 
 
-# 4. Create pop list with IDs ----
-dt_ids <-dt[,
+# 2.3 Create pop list with IDs ----
+dt_ids_gd <-dt_gd[,
             c('country_code', 'reporting_year', 'id')]
 
 
-pop_list <-
-  joyn::merge(pop, dt_ids,
+pop_list_gd <-
+  joyn::merge(pop, dt_ids_gd,
               reportvar = FALSE,
               keep = 'right') |>
   unique() |>
@@ -184,40 +188,37 @@ pop_list <-
   })
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# 5. Get population and welfare vctrs for CHN, IND and IDN ----
+# 2.4 Get population and welfare vctrs  ----
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# !!!! CHN, IND, IDN filter ----
-countries <- c("CHN", "IND", "IDN")
 
-fpf <- pfw[country_code %in% countries, # temporary
-           .(country_code,
-             surveyid_year,
-             reporting_year,
-             survey_year,
-             welfare_type)]
+fpf_gd <- pfw_gd[,
+                  .(country_code,
+                    surveyid_year,
+                    reporting_year,
+                    survey_year,
+                    welfare_type)]
 
 
-fpf[, `:=`(
+fpf_gd[, `:=`(
   id = paste(country_code, reporting_year, welfare_type, sep = "_"),
   version = version
 )
 ]
 
 issues <- c('CHN_2021_consumption', 'QAT_2017_income') # need to think how to filter for that
-fpf <- fpf[id %!in% issues,]
+fpf_gd <- fpf_gd[id %!in% issues,]
 
-pl <- split(fpf, by = "id")
+pl <- split(fpf_gd, by = "id")
 
-vctrs <- map(pl, gd_pop_wlf)
-names(vctrs) <- fpf[, id]
+vctrs <- map(pl, gd_pop_wlf_rur_urb)
+names(vctrs) <- fpf_gd[, id]
 
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# 6. Get distributions at national level   ----------------
+# 2.5 Get distributions at national level   ---------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-tic()
 # Map
 gd_synth_bins <- map(
   .x = names(vctrs),
@@ -225,26 +226,83 @@ gd_synth_bins <- map(
     id <- .x
     mean_id <- mean_ppp[[id]]
     vctr_id <- vctrs[[id]]
-    pop_table_id <- pop_list[[id]]
+    pop_table_id <- pop_list_gd[[id]]
 
 
-    wf_id <- create_synth_bins(
+    wf_id <- poss_create_synth_bins(
       vctr = vctr_id,
       mean = mean_id,
       pop = pop_table_id,
       nbins = 100
     )
 
+
     return(wf_id)
   }
 )
-toc()
+
 # Set names for the list of processed data tables
 names(gd_synth_bins) <- names(vctrs)
 
+# Problematic databases
+gd_synth_bins_err <-
+  gd_synth_bins |>
+  keep(is.null) |>
+  names()
 
-# Assign the names from vctrs to the outer_wf result
-names(outer_wf) <- names(vctrs)
+# There are a large number of problematic databases.
+# They fail at the `check_lorenz_validity` step somehow.
+# Do we know already why? Do I need to investigate?
+gd_synth_bins_err
 
 
+# 3. MICRO DATA ----
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## 3.1 Load data   ---------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+
+pfw <- pipload::pip_load_aux("pfw") |>
+  {\(.) .[use_groupdata != 1]}()
+
+
+fpf <- pfw[, .(country_code,
+               surveyid_year,
+               reporting_year,
+               welfare_type
+)]
+
+fpf[, `:=`(
+  id = paste(country_code, reporting_year, welfare_type, sep = "_"),
+  version = version,
+  wt_call = toupper(substr(welfare_type, 1, 3)))
+]
+
+fpf <- fpf[reporting_year == 2023,]
+
+fpf <- fpf |>
+  split(by = "id")
+
+
+poss_get_micro_dist_rur_urb <- purrr::possibly(.f = get_micro_dist_rur_urb,
+                                     otherwise = NULL)
+dr <- purrr::map(.x = fpf,
+                 .f = poss_get_micro_dist_rur_urb)
+
+names(dr) <- names(fpf)
+
+
+# Null databases
+dr_err <-
+  dr |>
+  purrr::keep(is.null) |>
+  names()
+dr_err
+
+
+md_100_bins <-
+  dr |>
+  purrr::keep(.p = ~{!is.null(.x)})
+
+
+md_100_bins

@@ -213,6 +213,9 @@ create_synth_bins <- function(vctr,
   return(dt)
 }
 
+poss_create_synth_bins <- purrr::possibly(.f = create_synth_bins,
+                                              otherwise = NULL)
+
 get_synth_level_rbind <- function(vctr,
                                   mean,
                                   pop) {
@@ -246,6 +249,119 @@ get_synth_level_rbind <- function(vctr,
   combined_results <- purrr::reduce(synth_level, rbind)|>
     setorder(welfare)
 
-
+  return(combined_results)
 }
 
+
+# Variation on gd_pop_wlf which gets only urban/rural: maybe we can adapt the
+# original later to take an additional argument.
+gd_pop_wlf_rur_urb <- function(pl) {
+
+  dt   <- pipload::pip_load_cache(pl$country_code,
+                                  pl$surveyid_year,
+                                  verbose = FALSE,
+                                  version = pl$version)
+
+  # Check if 'national' is a reporting level:
+  if ("national" %in% dt$reporting_level) {
+    return(NULL)
+  }
+
+  levels     <- dt[, unique(reporting_level)]
+  welfare    <- vector("list", length(levels))
+  population <- vector("list", length(levels))
+  for (i in seq_along(levels)) {
+    nn <- levels[[i]]
+    welfare[[i]] <- dt[reporting_level == nn,
+                       welfare]
+    population[[i]] <- dt[reporting_level == nn,
+                          weight]
+  }
+
+  names(welfare) <- names(population) <- levels
+
+  id <- paste(pl$country_code,
+              pl$surveyid_year,
+              pl$welfare_type,
+              sep = "_")
+
+  # attr(welfare, "id") <- attr(population, "id") <- id
+
+
+  return(list(welfare    = welfare,
+              population = population))
+}
+
+get_micro_dist_rur_urb <- function(pl) {
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  ## load data and order --------
+
+  dt   <- pipload::pip_load_cache(pl$country_code,
+                                  pl$surveyid_year,
+                                  verbose = FALSE,
+                                  version = pl$version,
+                                  welfare_type = pl$wt_call)
+
+  setorder(dt, imputation_id, welfare_type,
+           welfare_ppp, weight)
+
+  ## Exit if dt has national
+  unique_levels <- unique(dt$reporting_level)
+  if ('national' %in% unique_levels) {
+    return(NULL)
+  }
+
+
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  ## bins ant totals --------
+
+  dt[,
+     # get bins and total pop and welfare
+     bin := wbpip:::md_compute_bins(welfare_ppp,
+                                    weight,
+                                    nbins = nq,
+                                    output = "simple"),
+     by = c("imputation_id", "welfare_type") # remove reporting level
+  ][,
+    `:=`(
+      tot_pop = sum(weight),
+      tot_wlf = sum(welfare_ppp*weight)
+    ),
+    by = c("imputation_id", "welfare_type") # remove reporting level
+  ]
+
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  ## main measures --------
+
+  dt[,
+     # get avg wlf, pop and wlf shared
+     c("avg_welfare", "pop_share", "welfare_share", "quantile") := {
+       avg_welfare   <-  weighted.mean(welfare_ppp, weight)
+       pop_share     <- sum(weight)/tot_pop
+       welfare_share <- sum(welfare_ppp*weight)/tot_wlf
+       quantile      <- max(welfare_ppp)
+       list(avg_welfare, pop_share, welfare_share, quantile)
+     },
+     by = .(imputation_id, welfare_type,  bin)]
+
+  dt <-
+    dt[,
+       # mean by imputation and bin
+       lapply(.SD, mean),
+       by = .(imputation_id, welfare_type, bin),
+       .SDcols =  c("avg_welfare", "pop_share", "welfare_share", "quantile")
+    ][,
+      # mean by bin
+      lapply(.SD, mean),
+      by = .(welfare_type, bin),
+      .SDcols =  c("avg_welfare", "pop_share", "welfare_share", "quantile")
+    ]
+
+  dt[,
+     id := paste(pl$country_code,
+                 pl$reporting_year,
+                 welfare_type,
+                 sep = "_")]
+
+  return(dt)
+}
