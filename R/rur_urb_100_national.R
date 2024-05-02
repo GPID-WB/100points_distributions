@@ -20,14 +20,14 @@
 source("R/init.R")
 
 # Filter for specific countries  ----
-# countries <- c("CHN")
+#countries <- c("CHN", "IND", "IDN")
 
 # 2. GROUPED DATA ----
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# 2.1 Load Aux data   ---------
+## 2.1 Load Aux data   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-## PFW ------------
+### PFW ------------
 pfw_gd <- pipload::pip_load_aux("pfw") |>
   fsubset(use_groupdata == 1 & # filter for grouped data
             inpovcal  == 1) |> # do I need to keep this?
@@ -40,7 +40,7 @@ pfw_gd <- pipload::pip_load_aux("pfw") |>
           tosplit)
 
 
-## CPI ------------
+### CPI ------------
 cpi_var <- paste0("cpi", ppp_year)
 cpi <- pipload::pip_load_aux("cpi") |>
   ftransform(cpi = get(cpi_var)) |>
@@ -51,7 +51,7 @@ cpi <- pipload::pip_load_aux("cpi") |>
           survey_acronym,
           cpi)
 
-## PPP -------------------
+### PPP -------------------
 ppp <- pipload::pip_load_aux("ppp")
 
 ppp <- ppp |>
@@ -63,7 +63,7 @@ ppp <- ppp |>
   setorder(country_code, reporting_level) |>
   ftransform(rep_level = rowid(country_code))
 
-## GDM ---------------
+### GDM ---------------
 gdm <- pipload::pip_load_aux("gdm") |>
   fselect(country_code,
           survey_year,
@@ -75,7 +75,7 @@ gdm <- pipload::pip_load_aux("gdm") |>
   setorder(country_code, survey_year, surveyid_year, reporting_level) |>
   ftransform(rep_level = rowid(country_code, survey_year))
 
-## POP ----------------
+### POP ----------------
 pop <- pipload::pip_load_aux("pop") |>
   fselect(country_code,
           reporting_year = year,
@@ -85,9 +85,11 @@ pop <- pipload::pip_load_aux("pop") |>
   ftransform(rep_level = rowid(country_code, reporting_year))
 
 
-# 2.2 Merge aux data ----------------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## 2.2 Merge Aux data   ---------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-## CPI and PFW -----------
+### CPI and PFW -----------
 cpi_pfw_gd <-
   joyn::merge(cpi, pfw_gd,
               by = c("country_code",
@@ -99,7 +101,7 @@ cpi_pfw_gd <-
   setorder(country_code, survey_year, surveyid_year, reporting_level) |>
   ftransform(rep_level = rowid(country_code, survey_year))
 
-## Add GDM --------------
+### Add GDM --------------
 gdm_cpi_pfw_gd <-
   joyn::merge(gdm, cpi_pfw_gd,
               by = c("country_code",
@@ -115,7 +117,7 @@ vars <- names(gdm_cpi_pfw_gd) |>
 
 vars <- vars[vars %!in% c("country_code", "survey_year", "report")]
 
-# Use national cpi for for those values with NA in urban
+### Use national cpi for for those values with NA in urban
 gdm_cpi_pfw_gd[,
             (vars) := lapply(.SD,
                              \(x) {
@@ -127,7 +129,7 @@ gdm_cpi_pfw_gd[,
 ][,
   report := NULL]
 
-## Add PPP ------------------
+### Add PPP ------------------
 dt_gd <-
   joyn::merge(gdm_cpi_pfw_gd, ppp,
               by = c("country_code", "rep_level"),
@@ -136,7 +138,7 @@ dt_gd <-
               keep = "left",
               reportvar = FALSE) # should all match
 
-## Deflate mean   ---------
+### Deflate mean   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 dt_gd[, mean_ppp :=  {
@@ -168,7 +170,9 @@ mean_ppp <-
   })
 
 
-# 2.3 Create pop list with IDs ----
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## 2.3 Create pop_list with id   ---------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 dt_ids_gd <-dt_gd[,
             c('country_code', 'reporting_year', 'id')]
 
@@ -205,7 +209,7 @@ fpf_gd[, `:=`(
 )
 ]
 
-issues <- c('CHN_2021_consumption', 'QAT_2017_income') # need to think how to filter for that
+issues <- c('CHN_2021_consumption', 'QAT_2017_income') # they don't have reporting_level?
 fpf_gd <- fpf_gd[id %!in% issues,]
 
 pl <- split(fpf_gd, by = "id")
@@ -214,13 +218,12 @@ vctrs <- map(pl, gd_pop_wlf_rur_urb)
 names(vctrs) <- fpf_gd[, id]
 
 
-
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 2.5 Get distributions at national level   ---------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # Map
-gd_synth_bins <- map(
+gd_synth_100 <- map(
   .x = names(vctrs),
   .f = ~{
     id <- .x
@@ -236,24 +239,25 @@ gd_synth_bins <- map(
       nbins = 100
     )
 
-
     return(wf_id)
   }
 )
 
 # Set names for the list of processed data tables
-names(gd_synth_bins) <- names(vctrs)
+names(gd_synth_100) <- names(vctrs)
 
-# Problematic databases
-gd_synth_bins_err <-
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+### 3.3 Null databases   ---------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+gd_synth_100_err <-
   gd_synth_bins |>
   keep(is.null) |>
   names()
 
-# There are a large number of problematic databases.
-# They fail at the `check_lorenz_validity` step somehow.
-# Do we know already why? Do I need to investigate?
-gd_synth_bins_err
+# NULL databases are the ones with 'national' in it,
+# but I need to add a check because there might be
+# some databases which fail after.
+gd_synth_100_err
 
 
 # 3. MICRO DATA ----
@@ -283,26 +287,24 @@ fpf <- fpf[reporting_year == 2023,]
 fpf <- fpf |>
   split(by = "id")
 
-
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## 3.2 Calculate measures   ---------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 poss_get_micro_dist_rur_urb <- purrr::possibly(.f = get_micro_dist_rur_urb,
                                      otherwise = NULL)
-dr <- purrr::map(.x = fpf,
+md_100 <- purrr::map(.x = fpf,
                  .f = poss_get_micro_dist_rur_urb)
 
-names(dr) <- names(fpf)
+names(md_100) <- names(fpf)
 
 
-# Null databases
-dr_err <-
-  dr |>
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## 3.3 Null databases   ---------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+md_100_err <-
+  md_100 |>
   purrr::keep(is.null) |>
   names()
-dr_err
 
+md_100_err
 
-md_100_bins <-
-  dr |>
-  purrr::keep(.p = ~{!is.null(.x)})
-
-
-md_100_bins
