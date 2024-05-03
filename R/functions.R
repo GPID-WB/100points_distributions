@@ -75,6 +75,7 @@ get_gd_calcs <- function(level, vctr, mean, id) {
   dt[, bin := .I
   ][bin == max(bin),
     quantile := NA_real_]
+
   return(dt)
 }
 
@@ -178,7 +179,8 @@ get_micro_dist <- function(pl) {
 create_synth_bins <- function(vctr,
                               mean,
                               pop,
-                              nbins) {
+                              nbins,
+                              id) {
 
   # Get synthetic distribution
   dt <- get_synth_level_rbind(
@@ -209,6 +211,10 @@ create_synth_bins <- function(vctr,
            lapply(.SD, mean, na.rm = TRUE),
            by = .(bin),
            .SDcols = c("avg_welfare", "pop_share", "welfare_share", "quantile")]
+
+  # Add variables
+  dt[,
+     reporting_level := 'synth']
 
   return(dt)
 }

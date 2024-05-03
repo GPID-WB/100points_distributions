@@ -1,7 +1,7 @@
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# project:       Create 100-point national distribution for group data
-# Author:        Giorgia
+# project:       Create 100-point national distribution for gd data with rural/urban reporting_level only
+# Author:
 # Dependencies:
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Creation Date:    2024-04-30
@@ -207,7 +207,9 @@ fpf_gd[, `:=`(
 )
 ]
 
-issues <- c('CHN_2021_consumption', 'QAT_2017_income') # they don't have reporting_level?
+# !!! CHN 2021, QAT 2017 ISSUES -----
+# They are in fpf but not in the cache data (NULL)
+issues <- c('CHN_2021_consumption', 'QAT_2017_income')
 fpf_gd <- fpf_gd[id %!in% issues,]
 
 pl <- split(fpf_gd, by = "id")
@@ -215,14 +217,23 @@ pl <- split(fpf_gd, by = "id")
 vctrs <- map(pl, gd_pop_wlf_rur_urb)
 names(vctrs) <- fpf_gd[, id]
 
+# Non rur/urb only databases:
+vctrs_exclude <-
+  vctrs |>
+  keep(is.null) |>
+  names()
+
+vctrs_exclude
+rur_urb_vctrs <- vctrs[!names(vctrs) %in% vctrs_exclude]
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 2.5 Get distributions at national level   ---------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # Map
+tic()
 gd_synth_100 <- map(
-  .x = names(vctrs),
+  .x = names(rur_urb_vctrs),
   .f = ~{
     id <- .x
     mean_id <- mean_ppp[[id]]
@@ -234,35 +245,52 @@ gd_synth_100 <- map(
       vctr = vctr_id,
       mean = mean_id,
       pop = pop_table_id,
+      id = id,
       nbins = 100
     )
 
     return(wf_id)
   }
 )
+toc()
 
 # Set names for the list of processed data tables
-names(gd_synth_100) <- names(vctrs)
+names(gd_synth_100) <- names(rur_urb_vctrs)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-### 3.3 Null databases   ---------
+### 3.3 Null databases check   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 gd_synth_100_err <-
-  gd_synth_bins |>
+  gd_synth_100 |>
   keep(is.null) |>
   names()
 
-# NULL databases are the ones with 'national' in it,
-# but I need to add a check because there might be
-# some databases which fail after.
-gd_synth_100_err
+# No issues.
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+### 3.4 format and save data   ---------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+gd_synth_100 <-
+  compact(gd_synth_100) |> # remove issues in case there are some.
+  imap(.f = ~{
+    .x[, id := .y]
+    .x[, welfare_type := gsub("(.+_)([^_]+)$", "\\2", id)]
+    .x
+  })
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+### 3.4 format and save data   ---------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+# Note: This will overwrite the existing files with rural/urban levels.
+iwalk(gd_synth_100, \(x, idx) fmt_sve(x, idx))
 
 
 # 3. MICRO DATA ----
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ## 3.1 Load data   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
 
 pfw <- pipload::pip_load_aux("pfw") |>
   {\(.) .[use_groupdata != 1]}()
