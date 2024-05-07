@@ -22,6 +22,7 @@ if (!"lkups" %in% ls() || isTRUE(force)) {
 }
 
 version  <- "20240326_2017_01_02_PROD"
+version  <- "20240429_2017_01_02_INT"
 
 new_dir <-
   fs::path("p:/03.pip/estimates/1kbins_lineup", version) |>
@@ -91,7 +92,8 @@ with_progress({
                 if (!fs::file_exists(fst_file) || force == TRUE) {
                   lt <- pipapi::pip(povline = pl,
                                    lkup = lkup,
-                                   fill_gaps = TRUE)
+                                   fill_gaps = TRUE,
+                                   year = 1990:2023)
                   fst::write_fst(lt, fst_file)
                   # haven::write_dta(lt, dta_file)
                 }
