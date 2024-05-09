@@ -402,3 +402,19 @@ get_micro_dist_rur_urb <- function(pl) {
 
   return(dt)
 }
+
+
+fmt_sve_synth <- function(dt, id) {
+  dt <- copy(dt)
+  nvars <- c("country_code", "year", "welfare_type")
+  id    <- unique(dt[, id])
+
+  dt[,
+     (nvars) := tstrsplit(id, split = "_")
+  ][, id := NULL]
+
+  id <- glue("{id}_synth_{nq}bin") # added synth to name to avoid overwriting
+
+  fs::path(singles_dir, id, ext = ext) |>
+    qs::qsave(x = dt, file = _)
+}

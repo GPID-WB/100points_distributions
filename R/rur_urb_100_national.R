@@ -291,7 +291,7 @@ gd_synth_100 <-
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # Note: This will overwrite the existing files with rural/urban levels.
-iwalk(gd_synth_100, \(x, idx) fmt_sve(x, idx))
+iwalk(gd_synth_100, \(x, idx) fmt_sve_synth(x, idx))
 
 
 # 3. MICRO DATA ----
@@ -364,7 +364,7 @@ md_100 <-
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ## 3.5 Format and save data   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-iwalk(md_100, \(x, idx) fmt_sve(x, idx))
+iwalk(md_100, \(x, idx) fmt_sve_synth(x, idx))
 
 
 
