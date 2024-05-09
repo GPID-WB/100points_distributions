@@ -40,6 +40,7 @@ ppp_year <- py <- version |>
 
 
 # aux versions
+# necessary because CHN 2021 and QAT 2017 not in data.
 pfw_version <- NULL
 pfw_version <- '20240229112650'
 
@@ -56,7 +57,7 @@ pop_version <- NULL
 pop_version <- '20240307121122'
 
 
-## folders parameters
+## !!! folders parameters: change to desired folder in pip
 singles_dir <-
   fs::path("data/singles", version) |>
   fs::dir_create()
@@ -64,5 +65,6 @@ singles_dir <-
 album_dir <-
   fs::path("data/album", version) |>
   fs::dir_create()
+
 ext <- "qs"
 
