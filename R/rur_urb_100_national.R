@@ -1,7 +1,7 @@
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # project:       Create 100-point national distribution for gd data with rural/urban reporting_level only
-# Author:
+# Author:        Giorgia Cecchinato
 # Dependencies:
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Creation Date:    2024-04-30
@@ -29,7 +29,7 @@ source("R/init.R")
 pfw_gd <- pipload::pip_load_aux("pfw",
                                 version = pfw_version) |>
   fsubset(use_groupdata == 1 & # filter for grouped data
-            inpovcal  == 1) |> # do I need to keep this?
+            inpovcal  == 1) |> # this is the same as gd_100.R
   fselect(country_code,
           reporting_year,
           survey_year,
@@ -87,6 +87,8 @@ pop <- pipload::pip_load_aux("pop",
   setorder(country_code, reporting_year, reporting_level) |>
   ftransform(rep_level = rowid(country_code, reporting_year))
 
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ## 2.2 Merge Aux data   ---------
@@ -174,8 +176,12 @@ mean_ppp <-
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ## 2.3 Create pop_list with id   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
 dt_ids_gd <-dt_gd[,
             c('country_code', 'reporting_year', 'id')]
 
@@ -193,6 +199,8 @@ pop_list_gd <-
     attr(pop, 'label') <- NULL
     pop
   })
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 2.4 Get population and welfare vctrs  ----
@@ -231,8 +239,6 @@ rur_urb_vctrs <- vctrs[!names(vctrs) %in% vctrs_exclude]
 # 2.5 Get distributions at national level   ---------------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-# Map
-
 gd_synth_100 <- map(
   .x = names(rur_urb_vctrs),
   .f = ~{
@@ -247,7 +253,7 @@ gd_synth_100 <- map(
       mean = mean_id,
       pop = pop_table_id,
       id = id,
-      nbins = 100
+      nbins = nq
     )
 
     return(wf_id)
@@ -275,7 +281,7 @@ gd_synth_100_err <-
 gd_synth_100 <-
   compact(gd_synth_100) |> # remove issues in case there are some.
   imap(.f = ~{
-    .x[, id := .y]
+    .x[, id := .y] # add ID from name (.y)
     .x[, welfare_type := gsub("(.+_)([^_]+)$", "\\2", id)]
     .x
   })
