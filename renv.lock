@@ -141,6 +141,19 @@
       ],
       "Hash": "85c24dd7844977e4a680ba28f576125c"
     },
+    "arsenal": {
+      "Package": "arsenal",
+      "Version": "3.6.3",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "R",
+        "knitr",
+        "stats",
+        "utils"
+      ],
+      "Hash": "e16d280d498f4d8f2316a01dc3eed9b6"
+    },
     "askpass": {
       "Package": "askpass",
       "Version": "1.2.0",
