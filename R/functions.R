@@ -165,6 +165,13 @@ get_micro_dist <- function(pl) {
       .SDcols =  c("avg_welfare", "pop_share", "welfare_share", "quantile")
     ]
 
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  ## Censoring --------
+
+  dt <- dt[bin == 100, quantile := NA_real_]
+
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  ## Creating id --------
   dt[,
      id := paste(pl$country_code,
                  pl$reporting_year,
