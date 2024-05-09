@@ -28,11 +28,13 @@ files_name <-
 vars <- c("country_code", "year", "welfare_type", "bins")
 dt   <- data.table(file = files_name)
 
-dt[, (vars) := tstrsplit(file, split = "_")]
+dt[, file_nosynth := gsub('synth_', '', file)]
+
+dt[, (vars) := tstrsplit(file_nosynth, split = "_")]
 
 bins <- dt[, unique(bins)]
 
-# loop o ver bin groups
+# loop over bin groups
 for (b in seq_along(bins)) {
 
   patter         <- glue("{bins[[b]]}")

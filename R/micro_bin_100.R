@@ -36,14 +36,15 @@ fpf[, `:=`(
 
 # fpf <- fpf[country_code %in% c("SOM", "COL") & surveyid_year == 2017]
 # fpf <- fpf[country_code %in% c("POL") & surveyid_year == 2004]
+fpf <- fpf[country_code %in% c("POL")]
 
 fpf <- fpf |>
   split(by = "id")
 
-poss_get_bin_dist <- purrr::possibly(.f = get_micro_dist,
+poss_get_micro_dist <- purrr::possibly(.f = get_micro_dist,
                                      otherwise = NULL)
 dr <- purrr::map(.x = fpf,
-                 .f = poss_get_bin_dist)
+                 .f = poss_get_micro_dist)
 
 names(dr) <- names(fpf)
 

@@ -2,6 +2,7 @@
 #                   Subfunctions   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+# 1. Grouped Data ----
 gd_pop_wlf <- function(pl) {
   # pl <- as.list(environment())
   # pl <- list(...)
@@ -75,6 +76,7 @@ get_gd_calcs <- function(level, vctr, mean, id) {
   dt[, bin := .I
   ][bin == max(bin),
     quantile := NA_real_]
+
   return(dt)
 }
 
@@ -102,10 +104,10 @@ fmt_sve <- function(dt, id) {
 
 
 
-
+# 2. Micro Data ----
 get_micro_dist <- function(pl) {
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  ## load data and order --------
+  ## Load data and order --------
 
   dt   <- pipload::pip_load_cache(pl$country_code,
                                   pl$surveyid_year,
@@ -116,7 +118,7 @@ get_micro_dist <- function(pl) {
   setorder(dt, imputation_id, reporting_level, welfare_type,  welfare_ppp, weight)
 
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  ## bins ant totals --------
+  ## Bins ant totals --------
 
   dt[,
      # get bins and total pop and welfare
@@ -135,7 +137,7 @@ get_micro_dist <- function(pl) {
   ]
 
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  ## main measures --------
+  ## Main measures --------
 
   dt[,
      # get avg wlf, pop and wlf shared
@@ -164,6 +166,13 @@ get_micro_dist <- function(pl) {
       .SDcols =  c("avg_welfare", "pop_share", "welfare_share", "quantile")
     ]
 
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  ## Censoring --------
+
+  dt <- dt[bin == 100, quantile := NA_real_]
+
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  ## Creating id --------
   dt[,
      id := paste(pl$country_code,
                  pl$reporting_year,
@@ -171,4 +180,241 @@ get_micro_dist <- function(pl) {
                  sep = "_")]
 
   return(dt)
+}
+
+
+# 2. Rur/Urb to National ----
+# Functions for surveys with urban/rural reporting level only
+create_synth_bins <- function(vctr,
+                              mean,
+                              pop,
+                              nbins,
+                              id) {
+
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  # Load synthetic distributions ----
+  dt <- get_synth_level_rbind(
+    vctr = vctr,
+    mean = mean,
+    pop = pop
+  )
+
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  # Bins and totals ----
+  dt[, bin := wbpip:::md_compute_bins(welfare,
+                                      weight,
+                                      nbins = nbins,
+                                      output = "simple")]
+  dt[, `:=`(tot_pop = sum(weight, na.rm = TRUE),
+            tot_wlf = sum(welfare * weight, na.rm = TRUE))]
+
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  # Main measures ----
+  dt[, c("avg_welfare", "pop_share", "welfare_share", "quantile") := {
+    avg_welfare   <- weighted.mean(welfare, weight, na.rm = TRUE)
+    pop_share     <- sum(weight, na.rm = TRUE) / tot_pop
+    welfare_share <- sum(welfare * weight, na.rm = TRUE) / tot_wlf
+    quantile      <- max(welfare, na.rm = TRUE)
+    .(avg_welfare, pop_share, welfare_share, quantile)
+  }, by = .(bin)]
+
+  # Getting means ----
+  dt <- dt[,
+           lapply(.SD, mean, na.rm = TRUE),
+           by = .(bin),
+           .SDcols = c("avg_welfare", "pop_share", "welfare_share", "quantile")]
+
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  # Add reporting level variable ----
+  dt[,
+     reporting_level := 'national']
+
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  # Censoring --------
+
+  dt <- dt[bin == 100, quantile := NA_real_]
+
+  return(dt)
+}
+
+poss_create_synth_bins <- purrr::possibly(.f = create_synth_bins,
+                                              otherwise = NULL)
+
+get_synth_level_rbind <- function(vctr,
+                                  mean,
+                                  pop) {
+
+  # Extract levels
+  levels <- names(mean)
+
+  # Create synth bins for each level
+  synth_level <- purrr::map(
+    levels,
+    ~{
+      level <- .x
+      # Extract data for the current level
+      welfare <- vctr$welfare[[level]]
+      population <- vctr$population[[level]]
+      mean_level <- mean[[level]]
+      pop_level <- pop[[level]]
+
+      # Create synthetic vector for this level
+      synth_vector_level <- wbpip:::sd_create_synth_vector(
+        welfare = welfare,
+        population = population,
+        mean = mean_level,
+        pop = pop_level
+      )
+      return(synth_vector_level)
+    }
+  )
+
+  # Combine all the results into a single data.table
+  combined_results <- purrr::reduce(synth_level, rbind)|>
+    setorder(welfare)
+
+
+  return(combined_results)
+}
+
+
+# Variation on gd_pop_wlf which gets only urban/rural: maybe we can adapt the
+# original later to take an additional argument.
+gd_pop_wlf_rur_urb <- function(pl) {
+
+  dt   <- pipload::pip_load_cache(pl$country_code,
+                                  pl$surveyid_year,
+                                  verbose = FALSE,
+                                  version = pl$version)
+
+  # Check if 'national' is a reporting level:
+  if ("national" %in% dt$reporting_level) {
+    return(NULL)
+  }
+
+  levels     <- dt[, unique(reporting_level)]
+  welfare    <- vector("list", length(levels))
+  population <- vector("list", length(levels))
+  for (i in seq_along(levels)) {
+    nn <- levels[[i]]
+    welfare[[i]] <- dt[reporting_level == nn,
+                       welfare]
+    population[[i]] <- dt[reporting_level == nn,
+                          weight]
+  }
+
+  names(welfare) <- names(population) <- levels
+
+  id <- paste(pl$country_code,
+              pl$surveyid_year,
+              pl$welfare_type,
+              sep = "_")
+
+  # attr(welfare, "id") <- attr(population, "id") <- id
+
+
+  return(list(welfare    = welfare,
+              population = population))
+}
+
+get_micro_dist_rur_urb <- function(pl) {
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  ## Load data and order --------
+
+  dt   <- pipload::pip_load_cache(pl$country_code,
+                                  pl$surveyid_year,
+                                  verbose = FALSE,
+                                  version = pl$version,
+                                  welfare_type = pl$wt_call)
+
+  setorder(dt, imputation_id, welfare_type,
+           welfare_ppp, weight)
+
+  ## Exit if dt has national
+  unique_levels <- unique(dt$reporting_level)
+  if ('national' %in% unique_levels) {
+    return(NULL)
+  }
+
+
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  ## Bins ant totals --------
+
+  dt[,
+     # get bins and total pop and welfare
+     bin := wbpip:::md_compute_bins(welfare_ppp,
+                                    weight,
+                                    nbins = nq,
+                                    output = "simple"),
+     by = c("imputation_id", "welfare_type") # remove reporting level
+  ][,
+    `:=`(
+      tot_pop = sum(weight),
+      tot_wlf = sum(welfare_ppp*weight)
+    ),
+    by = c("imputation_id", "welfare_type") # remove reporting level
+  ]
+
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  ## Main measures --------
+
+  dt[,
+     # get avg wlf, pop and wlf shared
+     c("avg_welfare", "pop_share", "welfare_share", "quantile") := {
+       avg_welfare   <-  weighted.mean(welfare_ppp, weight)
+       pop_share     <- sum(weight)/tot_pop
+       welfare_share <- sum(welfare_ppp*weight)/tot_wlf
+       quantile      <- max(welfare_ppp)
+       list(avg_welfare, pop_share, welfare_share, quantile)
+     },
+     by = .(imputation_id, welfare_type,  bin)]
+
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  ## Getting means --------
+  # Note: same as micro dist but no grouping by reporting level.
+
+  dt <-
+    dt[,
+       # mean by imputation and bin
+       lapply(.SD, mean),
+       by = .(imputation_id, welfare_type, bin),
+       .SDcols =  c("avg_welfare", "pop_share", "welfare_share", "quantile")
+    ][,
+      # mean by bin
+      lapply(.SD, mean),
+      by = .(welfare_type, bin),
+      .SDcols =  c("avg_welfare", "pop_share", "welfare_share", "quantile")
+    ]
+
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  ## Censoring --------
+
+  dt <- dt[bin == 100, quantile := NA_real_]
+
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  ## Creating id --------
+
+  dt[,
+     id := paste(pl$country_code,
+                 pl$reporting_year,
+                 welfare_type,
+                 sep = "_")]
+
+  return(dt)
+}
+
+
+fmt_sve_synth <- function(dt, id) {
+  dt <- copy(dt)
+  nvars <- c("country_code", "year", "welfare_type")
+  id    <- unique(dt[, id])
+
+  dt[,
+     (nvars) := tstrsplit(id, split = "_")
+  ][, id := NULL]
+
+  id <- glue("{id}_synth_{nq}bin") # added synth to name to avoid overwriting
+
+  fs::path(singles_dir, id, ext = ext) |>
+    qs::qsave(x = dt, file = _)
 }
