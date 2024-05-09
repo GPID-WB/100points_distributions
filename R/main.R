@@ -22,7 +22,7 @@ source("R/init.R")
 
 source("R/gd_100.R")
 source("R/micro_bin_100.R")
-source("R/rur_urb_100_national.R") # it should be run after gd and md.
+source("R/rur_urb_100_national.R")
 source("R/append_singles.R")
 source("R/labels_stata.R")
 

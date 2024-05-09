@@ -15,7 +15,7 @@ source("R/init.R")
 
 
 files_name <-
-  fs::dir_ls(singles_temp_dir,
+  fs::dir_ls(singles_dir,
              type = "file",
              regexp = glue("{ext}$")) |>
   fs::path_file() |>
@@ -28,11 +28,13 @@ files_name <-
 vars <- c("country_code", "year", "welfare_type", "bins")
 dt   <- data.table(file = files_name)
 
-dt[, (vars) := tstrsplit(file, split = "_")]
+dt[, file_nosynth := gsub('synth_', '', file)]
+
+dt[, (vars) := tstrsplit(file_nosynth, split = "_")]
 
 bins <- dt[, unique(bins)]
 
-# loop o ver bin groups
+# loop over bin groups
 for (b in seq_along(bins)) {
 
   patter         <- glue("{bins[[b]]}")
@@ -40,7 +42,7 @@ for (b in seq_along(bins)) {
 
   if (length(selected_files) == 0) next # skip and go to next iteration
 
-  file_paths     <- fs::path(singles_temp_dir, selected_files, ext = ext)
+  file_paths     <- fs::path(singles_dir, selected_files, ext = ext)
 
   ### load data and append ---------
   ldist <- map(file_paths, qs::qread)
