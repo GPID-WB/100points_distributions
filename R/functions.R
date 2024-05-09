@@ -214,7 +214,7 @@ create_synth_bins <- function(vctr,
 
   # Add variables
   dt[,
-     reporting_level := 'synth']
+     reporting_level := 'national']
 
   return(dt)
 }

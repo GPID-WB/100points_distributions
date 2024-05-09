@@ -26,7 +26,8 @@ source("R/init.R")
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ### PFW ------------
-pfw_gd <- pipload::pip_load_aux("pfw") |>
+pfw_gd <- pipload::pip_load_aux("pfw",
+                                version = pfw_version) |>
   fsubset(use_groupdata == 1 & # filter for grouped data
             inpovcal  == 1) |> # do I need to keep this?
   fselect(country_code,
@@ -40,7 +41,8 @@ pfw_gd <- pipload::pip_load_aux("pfw") |>
 
 ### CPI ------------
 cpi_var <- paste0("cpi", ppp_year)
-cpi <- pipload::pip_load_aux("cpi") |>
+cpi <- pipload::pip_load_aux("cpi",
+                             version = cpi_version) |>
   ftransform(cpi = get(cpi_var)) |>
   fselect(country_code,
           survey_year,
@@ -50,7 +52,8 @@ cpi <- pipload::pip_load_aux("cpi") |>
           cpi)
 
 ### PPP -------------------
-ppp <- pipload::pip_load_aux("ppp")
+ppp <- pipload::pip_load_aux("ppp",
+                             version = ppp_version)
 
 ppp <- ppp |>
   fsubset(ppp_year == py &
@@ -62,7 +65,8 @@ ppp <- ppp |>
   ftransform(rep_level = rowid(country_code))
 
 ### GDM ---------------
-gdm <- pipload::pip_load_aux("gdm") |>
+gdm <- pipload::pip_load_aux("gdm",
+                             version = gdm_version) |>
   fselect(country_code,
           survey_year,
           surveyid_year,
@@ -74,7 +78,8 @@ gdm <- pipload::pip_load_aux("gdm") |>
   ftransform(rep_level = rowid(country_code, survey_year))
 
 ### POP ----------------
-pop <- pipload::pip_load_aux("pop") |>
+pop <- pipload::pip_load_aux("pop",
+                             version = pop_version) |>
   fselect(country_code,
           reporting_year = year,
           reporting_level = pop_data_level,
@@ -207,10 +212,6 @@ fpf_gd[, `:=`(
 )
 ]
 
-# !!! CHN 2021, QAT 2017 ISSUES -----
-# They are in fpf but not in the cache data (NULL)
-issues <- c('CHN_2021_consumption', 'QAT_2017_income')
-fpf_gd <- fpf_gd[id %!in% issues,]
 
 pl <- split(fpf_gd, by = "id")
 
@@ -231,7 +232,7 @@ rur_urb_vctrs <- vctrs[!names(vctrs) %in% vctrs_exclude]
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # Map
-tic()
+
 gd_synth_100 <- map(
   .x = names(rur_urb_vctrs),
   .f = ~{
@@ -252,7 +253,7 @@ gd_synth_100 <- map(
     return(wf_id)
   }
 )
-toc()
+
 
 # Set names for the list of processed data tables
 names(gd_synth_100) <- names(rur_urb_vctrs)
@@ -268,7 +269,7 @@ gd_synth_100_err <-
 # No issues.
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-### 3.4 format and save data   ---------
+### 3.4 Add variables and remove issues.   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 gd_synth_100 <-
@@ -280,7 +281,7 @@ gd_synth_100 <-
   })
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-### 3.4 format and save data   ---------
+### 3.5 Save data   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # Note: This will overwrite the existing files with rural/urban levels.
@@ -296,42 +297,70 @@ pfw <- pipload::pip_load_aux("pfw") |>
   {\(.) .[use_groupdata != 1]}()
 
 
-fpf <- pfw[, .(country_code,
-               surveyid_year,
-               reporting_year,
-               welfare_type
+fpf_md <- pfw[, .(country_code,
+                  surveyid_year,
+                  reporting_year,
+                  welfare_type
 )]
 
-fpf[, `:=`(
+fpf_md[, `:=`(
   id = paste(country_code, reporting_year, welfare_type, sep = "_"),
   version = version,
   wt_call = toupper(substr(welfare_type, 1, 3)))
 ]
 
-# !!!!! REMOVE IF RUNNING FOR ALL DATA ----
-fpf <- fpf[reporting_year == 2023,]
 
-fpf <- fpf |>
+fpf_md <- fpf_md |>
   split(by = "id")
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ## 3.2 Calculate measures   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 poss_get_micro_dist_rur_urb <- purrr::possibly(.f = get_micro_dist_rur_urb,
-                                     otherwise = NULL)
-md_100 <- purrr::map(.x = fpf,
-                 .f = poss_get_micro_dist_rur_urb)
+                                               otherwise = NULL)
 
-names(md_100) <- names(fpf)
+tic()
+md_100 <- purrr::map(.x = fpf_md,
+                     .f = poss_get_micro_dist_rur_urb)
+toc()
+# 836 seconds 2017
+# 893 seconds 2011
+
+names(md_100) <- names(fpf_md)
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ## 3.3 Null databases   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-md_100_err <-
+
+md_100_null <-
   md_100 |>
   purrr::keep(is.null) |>
   names()
 
-md_100_err
+md_100_null
+length(md_100_null) # 2118/2207 (majority) (same for both).
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## 3.4 Add variables and remove issues.   ---------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+md_100 <-
+  compact(md_100) |>
+  map(.f = ~{
+    .x[,
+       reporting_level := 'national'
+    ]
+  })
+
+#89
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## 3.5 Format and save data   ---------
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+iwalk(md_100, \(x, idx) fmt_sve(x, idx))
+
+
+
+
 
