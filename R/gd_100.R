@@ -36,8 +36,6 @@ pfw <- pipload::pip_load_aux("pfw") |>
           tosplit)
 
 
-
-
 ## CPI ------------
 cpi_var <- paste0("cpi", ppp_year)
 cpi <- pipload::pip_load_aux("cpi") |>
@@ -168,8 +166,7 @@ mean_ppp <-
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Get population and welfare vctrs for Group data   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-fpf <- pfw[, .(country_code,
+fpf <- pfw[,.(country_code, #temporary just to run the code
                surveyid_year,
                reporting_year,
                survey_year,
@@ -180,6 +177,8 @@ fpf[, `:=`(
     version = version
   )
 ]
+
+
 
 # fpf <- fpf[1:5]
 # lf <- as.list(fpf)
@@ -210,11 +209,13 @@ rd <-
              })
 
 names(rd) <- names(vctrs)
+
 # Problematic databases
 rd_err <-
   rd |>
   keep(is.null) |>
   names()
+
 rd_err
 
 # Get rid of problematic data
@@ -225,8 +226,6 @@ rd <-
       welfare_type := gsub("(.+_)([^_]+)$", "\\2", id)
     ]
   })
-
-
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
