@@ -23,6 +23,7 @@ if (!"lkups" %in% ls() || isTRUE(force)) {
 
 version  <- "20240326_2017_01_02_PROD"
 version  <- "20240429_2017_01_02_INT"
+version  <- "20240627_2017_01_02_PROD"
 
 new_dir <-
   fs::path("p:/03.pip/estimates/1kbins_lineup", version) |>
@@ -65,14 +66,17 @@ countries <-
   countries |>
   sort(decreasing = FALSE)
 
-n_cores <- floor((availableCores() - 1) / 2)
-plan(multisession)
+n_cores <- floor((availableCores() - 1) / 2) - 1
 
-# countries <- c("HND", "PRY")
+plan(multisession, workers = n_cores)
+
+countries <- "NGA"
+years <- 1980:2024
+years <- 2018:2024
 # pls <- c(1:5)
 
 # Run by LInes with Future ---------
-force <- TRUE
+force <- FALSE
 with_progress({
   p <- progressor(steps = length(pls))
 
@@ -93,7 +97,7 @@ with_progress({
                   lt <- pipapi::pip(povline = pl,
                                    lkup = lkup,
                                    fill_gaps = TRUE,
-                                   year = 1990:2023)
+                                   year = years)
                   fst::write_fst(lt, fst_file)
                   # haven::write_dta(lt, dta_file)
                 }
@@ -112,27 +116,31 @@ plan(sequential)
 
 ### convert o Stata format ---------
 
+cols <- c(
+  "country_code",
+  "reporting_year",
+  "reporting_level",
+  "welfare_type",
+  "poverty_line",
+  "headcount",
+  "poverty_gap",
+  "poverty_severity"
+)
+
 tictoc::tic()
 new_dir |>
   fs::dir_ls(regexp = "fst$",
              recurse = FALSE,
              type = "file") |>
   purrr::map(\(x) {
-    y <- fst::read_fst(x, as.data.table = TRUE)
-    y[, c(
-      "country_code",
-      "reporting_year",
-      "reporting_level",
-      "welfare_type",
-      "poverty_line",
-      "headcount",
-      "poverty_gap",
-      "poverty_severity"
-    )]
+    y <- fst::read_fst(x,
+                       columns  = cols,
+                       as.data.table = TRUE)
 
     haven::write_dta(y, fs::path(fs::path_ext_remove(x), ext = "dta"))
     y
-    }) |>
+    },
+    .progress = TRUE) |>
   rbindlist() |>
   setorderv(cols = c("country_code",
                      "reporting_year",
@@ -146,8 +154,12 @@ toc <- tictoc::toc()
 toc
 
 
+if (require(pushoverr)) {
+  pushoverr::pushover("Done copying 1kbins to dta")
+}
 
 
+################## DO NOT USE THE CODE BELOW ########################
 
 
 
