@@ -120,20 +120,45 @@ get_micro_dist <- function(pl) {
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   ## Bins ant totals --------
 
+  # number of data labels
+  no_dl <- dt[, unique(reporting_level)] |>
+    length()
+
+  # if there are more than
+  if (no_dl > 1) {
+    natdt <- copy(dt)
+    natdt[,
+              # get bins and total pop and welfare
+
+              bin := wbpip:::md_compute_bins(welfare_ppp,
+                                             weight,
+                                             nbins = nq,
+                                             output = "simple"),
+              by = c("imputation_id",  "welfare_type")
+    ][,
+      reporting_level := "national"
+      ]
+  }
+
   dt[,
      # get bins and total pop and welfare
-
      bin := wbpip:::md_compute_bins(welfare_ppp,
                                     weight,
                                     nbins = nq,
                                     output = "simple"),
      by = c("imputation_id", "reporting_level", "welfare_type")
-  ][,
-    `:=`(
-      tot_pop = sum(weight),
-      tot_wlf = sum(welfare_ppp*weight)
-    ),
-    by = c("imputation_id", "reporting_level", "welfare_type")
+  ]
+
+  if (no_dl > 1) {
+    dt <- rowbind(natdt, dt)
+  }
+
+  dt[,
+     `:=`(
+       tot_pop = sum(weight),
+       tot_wlf = sum(welfare_ppp*weight)
+     ),
+     by = c("imputation_id", "reporting_level", "welfare_type")
   ]
 
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -153,23 +178,20 @@ get_micro_dist <- function(pl) {
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   ## Getting means --------
 
-  dt <-
-    dt[,
-       # mean by imputation and bin
-       lapply(.SD, mean),
-       by = .(imputation_id, reporting_level, welfare_type, bin),
-       .SDcols =  c("avg_welfare", "pop_share", "welfare_share", "quantile")
-    ][,
-      # mean by bin
-      lapply(.SD, mean),
-      by = .(reporting_level, welfare_type, bin),
-      .SDcols =  c("avg_welfare", "pop_share", "welfare_share", "quantile")
-    ]
+  dt <- dt |>
+    # mean by imputation and bin
+    fgroup_by(imputation_id, reporting_level, welfare_type, bin) |>
+    fselect(avg_welfare, pop_share, welfare_share, quantile) |>
+    fmean() |>
+    # mean by bin
+    fgroup_by(reporting_level, welfare_type, bin) |>
+    fselect(-imputation_id ) |>
+    fmean()
 
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   ## Censoring --------
 
-  dt <- dt[bin == 100, quantile := NA_real_]
+  dt <- dt[bin == nq, quantile := NA_real_]
 
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   ## Creating id --------
@@ -181,6 +203,8 @@ get_micro_dist <- function(pl) {
 
   return(dt)
 }
+
+
 
 
 # 2. Rur/Urb to National ----

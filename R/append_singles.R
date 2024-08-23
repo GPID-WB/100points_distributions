@@ -45,7 +45,7 @@ for (b in seq_along(bins)) {
   file_paths     <- fs::path(singles_dir, selected_files, ext = ext)
 
   ### load data and append ---------
-  ldist <- map(file_paths, qs::qread)
+  ldist <- purrr::map(file_paths, qs::qread, .progress = TRUE)
 
   whole <- rbindlist(ldist, use.names = TRUE, fill = TRUE)
   whole[, year := as.numeric(year)]
@@ -73,7 +73,7 @@ for (b in seq_along(bins)) {
 fs::dir_ls(path = album_dir,
            regexp = "world.*qs$") |>
   # load data
-  map(qs::qread) |>
+  map(qs::qread, .progress = TRUE) |>
   # get file names, remove qs, and save as dta
   {\(.) walk2(.x = names(.),
               .y = .,
