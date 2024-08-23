@@ -162,7 +162,7 @@ get_micro_dist <- function(pl) {
                              nbins = nq)) |>
       fungroup() |>
       ftransform(reporting_level = "national") |>
-      rowbind(df)
+      rowbind(dt)
   }
 
 
@@ -186,7 +186,7 @@ get_micro_dist <- function(pl) {
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   ## Censoring --------
 
-  dt <- dt[bin == nq, quantile := NA_real_]
+  dt <- dt[bin >= nq, quantile := NA_real_]
 
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   ## Creating id --------
@@ -465,6 +465,9 @@ new_bins <- \(welfare, weight, nbins) {
   }
 
   p <- fcumsum(weight)/fsum(weight)
-  ceiling(p * nbins) # Bins
+  bins <- ceiling(p * nbins) # Bins
+  bins[bins > nbins] <- nbins
+  bins
   # bins <-  cut(p, c(0, probs), labels = FALSE)
 }
+
