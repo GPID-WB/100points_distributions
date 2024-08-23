@@ -186,7 +186,8 @@ get_micro_dist <- function(pl) {
     # mean by bin
     fgroup_by(reporting_level, welfare_type, bin) |>
     fselect(-imputation_id ) |>
-    fmean()
+    fmean() |>
+    fungroup()
 
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   ## Censoring --------
@@ -200,6 +201,101 @@ get_micro_dist <- function(pl) {
                  pl$reporting_year,
                  welfare_type,
                  sep = "_")]
+
+  return(dt)
+}
+
+get_micro_dist <- function(pl) {
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  ## Load data and order --------
+
+  df   <- pipload::pip_load_cache(pl$country_code,
+                                  pl$surveyid_year,
+                                  verbose = FALSE,
+                                  version = pl$version,
+                                  welfare_type = pl$wt_call)
+
+  setorder(df, imputation_id, reporting_level, welfare_type,  welfare_ppp, weight)
+
+  # adjust weights to number of imputations
+
+  # number of imputations
+  n_ids <- df[, uniqueN(imputation_id)]
+
+  df[, weight := weight/n_ids]
+
+
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  ## Bins ant totals --------
+
+  df <- df |>
+      ## totals -----------
+    fgroup_by(c("welfare_type")) |>
+    fmutate(tot_pop = fsum(weight),
+            tot_wlf = fsum(welfare_ppp*weight)) |>
+    fungroup()
+
+
+  ## Bins at reporting level -------
+  # sort according to bins calculation method
+  setorder(df, welfare_type, reporting_level, welfare_ppp)
+  dt <- df |>
+    fgroup_by(c("welfare_type", "reporting_level")) |>
+    fmutate(bin = new_bins(welfare = welfare_ppp,
+                           weight = weight,
+                           nbins = nq)) |>
+    fungroup()
+
+  # number of data labels
+  no_dl <- uniqueN(df$reporting_level)
+
+
+  # if there is  more than one reporting level
+  if (no_dl > 1) {
+    ## Bins at national level ----
+    # sort according to bins calculation method
+    setorder(df, welfare_type, welfare_ppp)
+    dt <-  df |>
+      fgroup_by(c("welfare_type")) |>
+      fmutate(bin = new_bins(welfare = welfare_ppp,
+                             weight = weight,
+                             nbins = nq)) |>
+      fungroup() |>
+      ftransform(reporting_level = "national") |>
+      rowbind(df)
+  }
+
+
+
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  ## Main measures --------
+
+  dt <- dt |>
+    ## shares at the observation level ---------
+  ftransform(pop_share = weight/tot_pop,
+             welfare_share = (welfare_ppp*weight)/tot_wlf) |>
+    ## aggregate
+    fgroup_by(reporting_level, welfare_type, bin) |>
+    fsummarise(avg_welfare    = fmean(welfare_ppp, w = weight),
+               pop_share      = fsum(pop_share),
+               welfare_share  = fsum(welfare_share),
+               quantile       = fmax(welfare_ppp),
+               pop            = fsum(weight)) |>
+    fungroup()
+
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  ## Censoring --------
+
+  dt <- dt[bin == nq, quantile := NA_real_]
+
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  ## Creating id --------
+  dt[,
+     id := paste(pl$country_code,
+                 pl$reporting_year,
+                 welfare_type,
+                 sep = "_")]
+
 
   return(dt)
 }
@@ -441,4 +537,34 @@ fmt_sve_synth <- function(dt, id) {
 
   fs::path(singles_dir, id, ext = ext) |>
     qs::qsave(x = dt, file = _)
+}
+
+
+
+
+new_bins <- \(welfare, weight, nbins) {
+  # deal with NAs -----
+  if (anyNA(welfare)) {
+    ina      <- !is.na(welfare)
+    weight   <- weight[ina]
+    welfare  <- as.numeric(welfare)[ina]
+  }
+
+  if (anyNA(weight)) {
+    ina      <- !is.na(weight)
+    weight   <- weight[ina]
+    welfare  <- as.numeric(welfare)[ina]
+  }
+
+  # Sort data ------
+
+  if (is.unsorted(welfare)) {
+    o       <- order(welfare) # this is faster than collapse::radixorder
+    welfare <- welfare[o]
+    weight  <- weight[o]
+  }
+
+  p <- fcumsum(weight)/fsum(weight)
+  ceiling(p * nbins) # Bins
+  # bins <-  cut(p, c(0, probs), labels = FALSE)
 }
