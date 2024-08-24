@@ -23,8 +23,8 @@ op <- options(joyn.reportvar = "report")
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #                   Initial parameters   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-nq       <- 100
 nq       <- 1000
+nq       <- 100
 lorenz   <- NULL
 popshare <- seq(from = 1/nq, to = 1, by = 1/nq)
 version  <- "20230919_2017_01_02_PROD"

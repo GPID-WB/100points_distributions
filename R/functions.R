@@ -138,7 +138,7 @@ get_micro_dist <- function(pl) {
 
   ## Bins at reporting level -------
   # sort according to bins calculation method
-  setorder(df, welfare_type, reporting_level, welfare_ppp)
+  setorder(df, welfare_type, welfare_ppp)
   dt <- df |>
     fgroup_by(c("welfare_type", "reporting_level")) |>
     fmutate(bin = new_bins(welfare = welfare_ppp,
@@ -153,8 +153,6 @@ get_micro_dist <- function(pl) {
   # if there is  more than one reporting level
   if (no_dl > 1) {
     ## Bins at national level ----
-    # sort according to bins calculation method
-    setorder(df, welfare_type, welfare_ppp)
     dt <-  df |>
       fgroup_by(c("welfare_type")) |>
       fmutate(bin = new_bins(welfare = welfare_ppp,
