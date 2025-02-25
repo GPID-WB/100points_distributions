@@ -24,6 +24,7 @@ if (!"lkups" %in% ls() || isTRUE(force)) {
 version  <- "20240326_2017_01_02_PROD"
 version  <- "20240429_2017_01_02_INT"
 version  <- "20240627_2017_01_02_PROD"
+version  <- "20250401_2021_01_02_PROD"
 
 new_dir <-
   fs::path("p:/03.pip/estimates/1kbins_lineup", version) |>
@@ -71,8 +72,8 @@ n_cores <- floor((availableCores() - 1) / 2) - 1
 plan(multisession, workers = n_cores)
 
 countries <- "NGA"
-years <- 1980:2024
 years <- 2018:2024
+years <- 1980:2025
 # pls <- c(1:5)
 
 # Run by LInes with Future ---------
