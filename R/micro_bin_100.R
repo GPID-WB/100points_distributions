@@ -91,4 +91,10 @@ dr <-
 
 iwalk(dr, \(x, idx) fmt_sve(x, idx))
 
+
+# WQelfare share OK?
+
+was_ok <- lapply(dr, attr, "welfare_share_OK")
+
+
 # rd <- rbindlist(rd, use.names = TRUE)

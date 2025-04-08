@@ -25,9 +25,11 @@ version  <- "20240326_2017_01_02_PROD"
 version  <- "20240429_2017_01_02_INT"
 version  <- "20240627_2017_01_02_PROD"
 version  <- "20250401_2021_01_02_PROD"
+version  <- "20250401_2017_01_02_PROD"
 
 new_dir <-
   fs::path("p:/03.pip/estimates/1kbins_lineup", version) |>
+  # fs::path("p:/03.pip/estimates/1kbins_lineup_temp", version) |>
   fs::dir_create(recurse = TRUE)
 
 lkups <- pipapi::create_versioned_lkups(data_dir = data_dir,
@@ -71,12 +73,13 @@ n_cores <- floor((availableCores() - 1) / 2) - 1
 
 plan(multisession, workers = n_cores)
 
-countries <- "NGA"
+# countries <- "NGA"
 years <- 2018:2024
 years <- 1980:2025
 # pls <- c(1:5)
 
 # Run by LInes with Future ---------
+tictoc::tic()
 force <- FALSE
 with_progress({
   p <- progressor(steps = length(pls))
@@ -113,7 +116,8 @@ if (require(pushoverr)) {
 }
 
 plan(sequential)
-
+toc <- tictoc::toc()
+toc
 
 ### convert o Stata format ---------
 
@@ -129,16 +133,25 @@ cols <- c(
 )
 
 tictoc::tic()
-new_dir |>
+
+force = FALSE
+fst_files <- new_dir |>
   fs::dir_ls(regexp = "fst$",
              recurse = FALSE,
-             type = "file") |>
-  purrr::map(\(x) {
+             type = "file")
+
+  purrr::map(fst_files, \(x) {
     y <- fst::read_fst(x,
                        columns  = cols,
                        as.data.table = TRUE)
 
-    haven::write_dta(y, fs::path(fs::path_ext_remove(x), ext = "dta"))
+    dta_file <- x |>
+      fs::path_ext_remove() |>
+      fs::path(ext = "dta")
+
+    if (force == TRUE || !fs::file_exists(dta_file)) {
+      haven::write_dta(y, dta_file)
+    }
     y
     },
     .progress = TRUE) |>
