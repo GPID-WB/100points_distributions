@@ -57,3 +57,36 @@ for (i in seq_along(nqs)) {
   options(op)
 }
 
+
+
+nqs  <- c(100, 100, 1000, 1000)
+vers <- c(
+  "20250401_2021_01_02_PROD",
+  "20250401_2017_01_02_PROD",
+  "20250401_2021_01_02_PROD",
+  "20250401_2017_01_02_PROD")
+
+
+dok <- vector("list", length = length(nqs))
+for (i in seq_along(nqs)) {
+  nq <- nqs[i]
+  version <- vers[i]
+
+  singles_dir <-
+    fs::path("data/singles", version) |>
+    fs::dir_create()
+
+
+  files <- fs::dir_ls(singles_dir, regexp = paste0(nq, "bin"))
+  dok[[i]] <-
+    lapply(files, \(x) {
+    ws_ok <- qs::qattributes(x)$welfare_share_OK
+    data.table(version = version, file = fs::path_file(x), ws_ok = ws_ok)
+  }) |>
+    rowbind()
+}
+
+all_ok <- rowbind(dok)
+
+all_ok[ws_ok == FALSE]
+
