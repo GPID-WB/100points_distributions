@@ -136,9 +136,15 @@ get_micro_dist <- function(pl) {
   df[, weight := weight/n_ids]
 
 
-  R  <- duplicate_households(df)
-  lt    <- attr(R, "lorenz")
-  ws_OK <- attr(R, "welfare_share_OK")
+  # R  <- duplicate_households(df)
+  # lt    <- attr(R, "lorenz")
+  # ws_OK <- attr(R, "welfare_share_OK")
+  lt <- lorenz_table(df, nq = nq)
+
+
+  # fix welfare share.
+  lt <- fix_welfare_share(lt, nq = nq)
+
 
 
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -154,8 +160,6 @@ get_micro_dist <- function(pl) {
                  wt,
                  sep = "_")]
 
-  setattr(lt, "welfare_share_OK", ws_OK)
-  setattr(lt, "lorenz", NULL)
   return(lt)
 }
 
@@ -399,3 +403,38 @@ fmt_sve_synth <- function(dt, id) {
 }
 
 
+# Fix welfare share
+
+fix_welfare_share <- \(x, nq) {
+
+  ori_name <- copy(names(x))
+
+  y <- x |>
+    ftransform(weight_equal = fsum(pop,
+                                   reporting_level,
+                                   TRA = "fill") / fnobs(pop,
+                                                         reporting_level),
+               welf_tot     = avg_welfare * pop) |>
+    ftransform(welf_tot_equal = avg_welfare * weight_equal) |>
+    ftransform(welf_tot_diff =
+                 fsum(welf_tot, reporting_level, TRA = "fill") -
+                 fsum(welf_tot_equal, reporting_level, TRA = "fill"),
+               sum_avg_welfare = fsum(avg_welfare,
+                                      reporting_level,
+                                      TRA = "fill")) |>
+    ftransform(welf_tot_adj =
+                 welf_tot_equal + welf_tot_diff*avg_welfare/sum_avg_welfare) |>
+    # first adjust to avg welfare. change name of var to avg_welf_adj
+    # to compare
+    ftransform(avg_welfare = welf_tot_adj/weight_equal) |>
+    ftransform(sum_welf_tot_adj = fsum(welf_tot_adj,
+                                       reporting_level,
+                                       TRA = "fill")) |>
+    # Second adjust to welfare share. change name of var to welf_share_adj
+    # to compare
+    ftransform(welfare_share = welf_tot_adj/sum_welf_tot_adj) |>
+    get_vars(ori_name)
+
+  y
+
+}

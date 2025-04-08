@@ -17,6 +17,7 @@ library(glue)
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 source("R/functions.R")
+source("R/duplicate_households.R")
 op <- options(joyn.reportvar = "report")
 
 

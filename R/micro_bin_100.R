@@ -21,7 +21,9 @@ id_vars <-  c(
 cache_inv[, (id_vars) := tstrsplit(cache_id, split = "_", fill = TRUE)
           ][, welfare_type := fifelse(welfare_type == "CON", "consumption", "income")]
 
-
+# To remove.
+# cache_inv <- cache_inv[grep("SYNTH", cache_id)]
+# cache_inv <- cache_inv[grep("ALB.*2005", cache_id)]
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Load data   ---------
@@ -94,7 +96,7 @@ iwalk(dr, \(x, idx) fmt_sve(x, idx))
 
 # WQelfare share OK?
 
-was_ok <- lapply(dr, attr, "welfare_share_OK")
+# was_ok <- lapply(dr, attr, "welfare_share_OK")
 
 
 # rd <- rbindlist(rd, use.names = TRUE)

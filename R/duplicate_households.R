@@ -184,7 +184,11 @@ duplicate_households <- function(DT,
   }
 
   if (welfare_share_bad) {
-    R <- duplicate_households(R, weight, threshold, i = i, li = li)
+    R <- duplicate_households(R, weight = weight,
+                              threshold = threshold,
+                              i = i,
+                              li = li,
+                              super_limit = super_limit)
   }
 
   R
