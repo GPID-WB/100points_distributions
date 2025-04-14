@@ -410,29 +410,34 @@ fix_welfare_share <- \(x, nq) {
   ori_name <- copy(names(x))
 
   y <- x |>
-    ftransform(weight_equal = fsum(pop,
-                                   reporting_level,
-                                   TRA = "fill") / fnobs(pop,
-                                                         reporting_level),
-               welf_tot     = avg_welfare * pop) |>
-    ftransform(welf_tot_equal = avg_welfare * weight_equal) |>
-    ftransform(welf_tot_diff =
-                 fsum(welf_tot, reporting_level, TRA = "fill") -
-                 fsum(welf_tot_equal, reporting_level, TRA = "fill"),
-               sum_avg_welfare = fsum(avg_welfare,
-                                      reporting_level,
-                                      TRA = "fill")) |>
-    ftransform(welf_tot_adj =
-                 welf_tot_equal + welf_tot_diff*avg_welfare/sum_avg_welfare) |>
+    #  1. create equal sized bins
+    ftransform(tot_pop = fsum(pop, reporting_level, TRA = "fill"),
+               bin_total = fnobs(pop, reporting_leve, TRA = "fill")) |>
+    ftransform(pop_adj = tot_pop / bin_total,
+    # 2. create total welfare of each bin and
+    # aggregate welfare in the population
+               tot_welf_orign = avg_welfare * pop,
+               welf_tot_equal = avg_welfare * pop_adj) |>
+    ftransform(agg_welf_orign_sum = fsum(tot_welf_orign,
+                                         reporting_level, TRA = "fill"),
+               agg_welf_equal_sum = fsum(tot_welf_equal,
+                                         reporting_level, TRA = "fill"),
+               ) |>
+    #  3. generate the discrepancy (residual) of aggregate welfare
+    # in population using original or equalized population  distribute
+    # the discrepancy using the original distribution of average welfare
+    ftransform(residual = agg_welf_orign_sum - agg_welf_equal_sum,
+               tot_avg_welf = fsum(avg_welfare, reporting_level,TRA = "fill")
+               ) |>
+    ftransform(tot_welf_adj =
+                 tot_welf_equal + (residual * avg_welfare/tot_avg_welf)) |>
     # first adjust to avg welfare. change name of var to avg_welf_adj
     # to compare
-    ftransform(avg_welfare = welf_tot_adj/weight_equal) |>
-    ftransform(sum_welf_tot_adj = fsum(welf_tot_adj,
-                                       reporting_level,
-                                       TRA = "fill")) |>
+    #. 4. re-create a new average welfare
+    ftransform(avg_welfare =  tot_welf_adj/pop_adj) |>
     # Second adjust to welfare share. change name of var to welf_share_adj
     # to compare
-    ftransform(welfare_share = welf_tot_adj/sum_welf_tot_adj) |>
+    ftransform(welf_share = tot_welf_adj/agg_welf_orign_sum) |>
     get_vars(ori_name)
 
   y
