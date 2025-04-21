@@ -236,73 +236,70 @@ new_bins_old <- \(welfare, weight, nbins) {
 #'   The output may have more rows than the input due to household splitting.
 #'
 #' @export
-new_bins <- function(welfare, weight, nbins = 100, id = NULL) {
-  # ~~~ Defensive: handle missing values ~~~
-  non_na <- !is.na(welfare) & !is.na(weight)
-  welfare <- welfare[non_na]
-  weight  <- weight[non_na]
-  if (is.null(id)) {
-    id <- seq_along(welfare)
-  } else {
-    id <- id[non_na]
+new_bins <- function(welfare, weight, id, nbins = 100) {
+  # --- Defensive setup: remove NAs and validate ---
+  if (anyNA(welfare) || anyNA(weight) || anyNA(id)) {
+    ok <- !is.na(welfare) & !is.na(weight) & !is.na(id)
+    welfare <- welfare[ok]
+    weight  <- weight[ok]
+    id      <- id[ok]
   }
 
-  # ~~~ Sort households by welfare (ascending) ~~~
+  # --- Sort the data by welfare ascending ---
   o <- order(welfare)
   welfare <- welfare[o]
   weight  <- weight[o]
   id      <- id[o]
 
-  # ~~~ Set bin size based on total population weight ~~~
+  # --- Total weight and ideal bin size ---
   total_weight <- sum(weight)
-  bin_size <- total_weight / nbins
+  bin_size     <- total_weight / nbins
 
-  # ~~~ Prepare containers for results ~~~
-  out_id      <- vector("integer", 2*length(id))
-  out_welfare <- vector("numeric", 2*length(id))
-  out_weight  <- vector("numeric", 2*length(id))
-  out_bin     <- vector("integer", 2*length(id))
+  # --- Preallocate containers ---
+  max_size     <- 2 * length(welfare)  # upper bound for splits
+  out_id       <- vector("integer", max_size)
+  out_welfare  <- vector("numeric", max_size)
+  out_weight   <- vector("numeric", max_size)
+  out_bin      <- vector("integer", max_size)
 
-  # Initialize bin tracking
+  # --- Core logic: assign bins ensuring monotonicity ---
   current_bin <- 1
-  accumulated_weight <- 0
+  accumulated <- 0
+  k <- 0  # index tracker
 
-  # ~~~ Iterate through households and assign bins ~~~
   for (i in seq_along(welfare)) {
-    remaining_weight <- weight[i]
-    while (remaining_weight > 0) {
-      room_left <- bin_size - accumulated_weight
-      assign_weight <- min(room_left, remaining_weight)
+    w  <- weight[i]
+    wh <- welfare[i]
 
-      # Assign part (or all) of this household to current bin
-      out_id      <- c(out_id, id[i])
-      out_welfare <- c(out_welfare, welfare[i])
-      out_weight  <- c(out_weight, assign_weight)
-      out_bin     <- c(out_bin, current_bin)
+    while (w > 0 && current_bin <= nbins) {
+      room <- bin_size - accumulated
+      assign_weight <- min(w, room)
 
-      # Update accumulators
-      accumulated_weight <- accumulated_weight + assign_weight
-      remaining_weight   <- remaining_weight - assign_weight
+      k <- k + 1
+      out_id[k]      <- id[i]
+      out_welfare[k] <- wh
+      out_weight[k]  <- assign_weight
+      out_bin[k]     <- current_bin
 
-      # If bin is full, move to next bin
-      if (accumulated_weight >= bin_size && current_bin < nbins) {
+      accumulated <- accumulated + assign_weight
+      w <- w - assign_weight
+
+      # Advance bin if full (but stop at max bin)
+      if (accumulated >= bin_size && current_bin < nbins) {
         current_bin <- current_bin + 1
-        accumulated_weight <- 0
+        accumulated <- 0
       }
     }
   }
 
-  # ~~~ Return as data.table for merging back to original ~~~
-  DT <- data.table::data.table(
-    id = out_id,
-    welfare = out_welfare,
-    weight = out_weight,
-    bin = out_bin
+  # --- Build result table using only used rows ---
+  data.table::data.table(
+    id      = out_id[1:k],
+    welfare = out_welfare[1:k],
+    weight  = out_weight[1:k],
+    bin     = out_bin[1:k]
   )
-
-  DT[bin != 0]
 }
-
 
 
 
