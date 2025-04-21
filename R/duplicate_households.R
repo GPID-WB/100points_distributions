@@ -258,10 +258,10 @@ new_bins <- function(welfare, weight, nbins = 100, id = NULL) {
   bin_size <- total_weight / nbins
 
   # ~~~ Prepare containers for results ~~~
-  out_id <- integer()
-  out_welfare <- numeric()
-  out_weight <- numeric()
-  out_bin <- integer()
+  out_id      <- vector("integer", 2*length(id))
+  out_welfare <- vector("numeric", 2*length(id))
+  out_weight  <- vector("numeric", 2*length(id))
+  out_bin     <- vector("integer", 2*length(id))
 
   # Initialize bin tracking
   current_bin <- 1
@@ -293,12 +293,14 @@ new_bins <- function(welfare, weight, nbins = 100, id = NULL) {
   }
 
   # ~~~ Return as data.table for merging back to original ~~~
-  data.table::data.table(
+  DT <- data.table::data.table(
     id = out_id,
     welfare = out_welfare,
     weight = out_weight,
     bin = out_bin
   )
+
+  DT[bin != 0]
 }
 
 
