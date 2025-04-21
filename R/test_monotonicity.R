@@ -162,8 +162,8 @@ if (n_ids > 1) {
 }
 
 
-df[, .(reporting_level, welfare, weight)] |>
-  fwrite(fs::path(tdirp, "distribution.csv"))
+# df[, .(reporting_level, welfare, weight)] |>
+#   fwrite(fs::path(tdirp, "distribution.csv"))
 
 
 

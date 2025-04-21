@@ -94,7 +94,7 @@ lorenz_table <- \(df, nq = 100) {
   df2 <- df[reporting_level == "urban"]
 
 
-  bin_df <- df2[, new_bins(welfare = welfare,
+  bin_df <- df[, new_bins(welfare = welfare,
                           weight = weight,
                           id = id,
                           nbins = nq),
@@ -148,78 +148,80 @@ lorenz_table <- \(df, nq = 100) {
 #'   The output may have more rows than the input due to household splitting.
 #'
 #' @export
-new_bins <- function(welfare, weight, id, nbins = 100, tolerance = 1e-6) {
-  stopifnot(length(welfare) == length(weight),
-            length(weight) == length(id))
+new_bins <- function(welfare, weight, nbins = 100, id = NULL, tolerance = 1e-5) {
+  # Check for NAs and clean
+  valid <- !is.na(welfare) & !is.na(weight)
+  welfare <- welfare[valid]
+  weight  <- weight[valid]
+  if (!is.null(id)) id <- id[valid]
 
-  # ~~~ Handle NAs ~~~
-  keep <- !is.na(welfare) & !is.na(weight)
-  welfare <- welfare[keep]
-  weight  <- weight[keep]
-  id      <- id[keep]
-
-  # ~~~ Sort by welfare ~~~
+  # Order the data by welfare
   o <- order(welfare)
   welfare <- welfare[o]
   weight  <- weight[o]
-  id      <- id[o]
+  if (!is.null(id)) id <- id[o]
 
-  # ~~~ Define bin size ~~~
+  # Define bin target size
   total_weight <- sum(weight)
   bin_size     <- total_weight / nbins
 
-  # ~~~ Initialize outputs with some padding ~~~
-  n_est <- length(welfare) * 2
-  out_id      <- vector("integer", n_est)
-  out_welfare <- vector("numeric", n_est)
-  out_weight  <- vector("numeric", n_est)
-  out_bin     <- vector("integer", n_est)
+  # Initialize result containers (oversized)
+  out_id      <- integer(2 * length(welfare))
+  out_welfare <- numeric(2 * length(welfare))
+  out_weight  <- numeric(2 * length(welfare))
+  out_bin     <- integer(2 * length(welfare))
 
-  j <- 1  # index for outputs
-  current_bin     <- 1
-  accumulated_bin <- 0
+  cur_bin     <- 1
+  cur_weight  <- 0
+  out_index   <- 1
 
   for (i in seq_along(welfare)) {
-    w   <- weight[i]
-    val <- welfare[i]
-    uid <- id[i]
+    w  <- welfare[i]
+    wt <- weight[i]
+    original_id <- if (!is.null(id)) id[i] else i
 
-    while (w > 0) {
-      space <- bin_size - accumulated_bin
+    while (wt > 0 && cur_bin <= nbins) {
+      room <- bin_size - cur_weight
 
-      # If the last bin, allow a small tolerance
-      if (current_bin == nbins && w > space && abs(space - bin_size) < tolerance) {
-        portion <- w  # Dump remaining weight in last bin
-      } else {
-        portion <- min(w, space)
+      # Check if within tolerance of bin end
+      if (abs(room) < tolerance) {
+        cur_bin <- cur_bin + 1
+        cur_weight <- 0
+        next
       }
 
-      out_id[j]      <- uid
-      out_welfare[j] <- val
-      out_weight[j]  <- portion
-      out_bin[j]     <- current_bin
+      if (wt <= room + tolerance) {
+        # Fits in current bin
+        out_id[out_index]      <- original_id
+        out_welfare[out_index] <- w
+        out_weight[out_index]  <- wt
+        out_bin[out_index]     <- cur_bin
+        out_index <- out_index + 1
+        cur_weight <- cur_weight + wt
+        break
+      } else {
+        # Split into current bin and remainder
+        out_id[out_index]      <- original_id
+        out_welfare[out_index] <- w
+        out_weight[out_index]  <- room
+        out_bin[out_index]     <- cur_bin
+        out_index <- out_index + 1
 
-      w <- w - portion
-      accumulated_bin <- accumulated_bin + portion
-      j <- j + 1
-
-      if (accumulated_bin >= bin_size - tolerance && current_bin < nbins) {
-        current_bin     <- current_bin + 1
-        accumulated_bin <- 0
+        wt <- wt - room
+        cur_bin <- cur_bin + 1
+        cur_weight <- 0
       }
     }
   }
 
-  # ~~~ Build result ~~~
-  result <- data.table::data.table(
-    id      = out_id[1:(j - 1)],
-    welfare = out_welfare[1:(j - 1)],
-    weight  = out_weight[1:(j - 1)],
-    bin     = out_bin[1:(j - 1)]
+  # Build result
+  res <- data.table::data.table(
+    id = out_id[1:(out_index - 1)],
+    bin = out_bin[1:(out_index - 1)]
   )
-
-  return(result)
+  return(res)
 }
+
 
 
 
