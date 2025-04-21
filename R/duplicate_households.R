@@ -221,99 +221,86 @@ new_bins_old <- \(welfare, weight, nbins) {
 }
 
 
-#' Assign monotonic percentile bins by splitting large weights
+#' Assign households to weighted bins (percentiles)
 #'
-#' Ensures equal-weight bins and strictly monotonic welfare share by
-#' duplicating observations when their weight spans across bins.
+#' This function assigns each household to a percentile bin using a weighted distribution,
+#' ensuring that each bin has approximately the same total weight. Households with large
+#' weights may be duplicated and split across bins to preserve monotonicity of welfare shares.
 #'
-#' @param welfare Numeric vector of welfare levels (e.g., income).
-#' @param weight Numeric vector of sampling weights.
-#' @param nbins Number of desired bins (default: 100).
-#' @param id Optional vector of observation IDs for tracking.
+#' @param welfare Numeric vector of household welfare (e.g., income).
+#' @param weight  Numeric vector of sampling weights (same length as welfare).
+#' @param nbins   Number of bins to divide the population into (default = 100).
+#' @param id      Optional ID vector for each observation. If NULL, it will be generated.
 #'
-#' @return A data.table with columns: `id` (original or repeated), and `bin`.
+#' @return A `data.table` with columns: `id`, `welfare`, `weight`, and `bin`.
+#'   The output may have more rows than the input due to household splitting.
+#'
 #' @export
 new_bins <- function(welfare, weight, nbins = 100, id = NULL) {
-  stopifnot(length(welfare) == length(weight))
-  n <- length(welfare)
+  # ~~~ Defensive: handle missing values ~~~
+  non_na <- !is.na(welfare) & !is.na(weight)
+  welfare <- welfare[non_na]
+  weight  <- weight[non_na]
+  if (is.null(id)) {
+    id <- seq_along(welfare)
+  } else {
+    id <- id[non_na]
+  }
 
-  if (is.null(id)) id <- seq_len(n)
+  # ~~~ Sort households by welfare (ascending) ~~~
+  o <- order(welfare)
+  welfare <- welfare[o]
+  weight  <- weight[o]
+  id      <- id[o]
 
-  # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  # Handle NAs (WELFARE OR WEIGHT)
-  # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  na_mask <- !is.na(welfare) & !is.na(weight)
-  welfare <- welfare[na_mask]
-  weight  <- weight[na_mask]
-  id      <- id[na_mask]
-
-  # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  # Sort by increasing welfare
-  # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  o        <- order(welfare)
-  welfare  <- welfare[o]
-  weight   <- weight[o]
-  id       <- id[o]
-
-  # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  # Initialize
-  # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  # ~~~ Set bin size based on total population weight ~~~
   total_weight <- sum(weight)
-  bin_weight   <- total_weight / nbins
+  bin_size <- total_weight / nbins
 
-  bins     <- integer(0)
-  new_ids  <- integer(0)
+  # ~~~ Prepare containers for results ~~~
+  out_id <- integer()
+  out_welfare <- numeric()
+  out_weight <- numeric()
+  out_bin <- integer()
 
-  current_bin    <- 1
-  current_weight <- 0
-  i <- 1
+  # Initialize bin tracking
+  current_bin <- 1
+  accumulated_weight <- 0
 
-  # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  # Main loop
-  # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  while (i <= length(welfare) && current_bin <= nbins) {
-    w <- weight[i]
+  # ~~~ Iterate through households and assign bins ~~~
+  for (i in seq_along(welfare)) {
+    remaining_weight <- weight[i]
+    while (remaining_weight > 0) {
+      room_left <- bin_size - accumulated_weight
+      assign_weight <- min(room_left, remaining_weight)
 
-    # Case 1: fits in current bin
-    if (current_weight + w <= bin_weight || abs(current_weight + w - bin_weight) < 1e-8) {
-      bins     <- c(bins, current_bin)
-      new_ids  <- c(new_ids, id[i])
-      current_weight <- current_weight + w
-      i <- i + 1
-    } else {
-      # Case 2: split across bin
-      remaining <- bin_weight - current_weight
-      split_ratio <- remaining / w
-      weight1 <- w * split_ratio
-      weight2 <- w - weight1
+      # Assign part (or all) of this household to current bin
+      out_id      <- c(out_id, id[i])
+      out_welfare <- c(out_welfare, welfare[i])
+      out_weight  <- c(out_weight, assign_weight)
+      out_bin     <- c(out_bin, current_bin)
 
-      bins     <- c(bins, current_bin)
-      new_ids  <- c(new_ids, id[i])
+      # Update accumulators
+      accumulated_weight <- accumulated_weight + assign_weight
+      remaining_weight   <- remaining_weight - assign_weight
 
-      # Duplicate the leftover portion
-      welfare  <- append(welfare, welfare[i], after = i)
-      weight   <- append(weight, weight2,     after = i)
-      id       <- append(id,     id[i],       after = i)
-
-      weight[i] <- weight1
-
-      # Advance
-      current_bin <- current_bin + 1
-      current_weight <- 0
-      i <- i + 1
-    }
-
-    if (current_weight >= bin_weight - 1e-6) {
-      current_bin <- current_bin + 1
-      current_weight <- 0
+      # If bin is full, move to next bin
+      if (accumulated_weight >= bin_size && current_bin < nbins) {
+        current_bin <- current_bin + 1
+        accumulated_weight <- 0
+      }
     }
   }
 
-  # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  # Return result
-  # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  data.table::data.table(id = new_ids, bin = bins)
+  # ~~~ Return as data.table for merging back to original ~~~
+  data.table::data.table(
+    id = out_id,
+    welfare = out_welfare,
+    weight = out_weight,
+    bin = out_bin
+  )
 }
+
 
 
 
