@@ -73,47 +73,37 @@ clean_new_weights <- \(DT, ori_names) {
   DT <- DT[, ..ori_names]
 }
 
-lorenz_table <- \(x, nq = 100) {
+lorenz_table <- \(df, nq = 100) {
   # number of data labels
-  no_dl <- funique(x$reporting_level) |>
+  no_dl <- funique(df$reporting_level) |>
     length()
 
-  df <- x |>
-  ## totals -----------
-  ftransform(tot_pop = fsum(weight),
-             tot_wlf = fsum(welfare*weight))
+
+  if (no_dl > 1) {
+    ## Bins at national level ----
+    df2 <-  copy(df)
+    df2[, reporting_level := "national"]
+    df <- rowbind(df, df2)
+  }
 
   ## Bins at reporting level -------
   # sort according to bins calculation method
-  setorder(df, reporting_level, welfare)
   dt <-  df |>
+    setorder(reporting_level, welfare) |>
+    ftransform(wt_welfare = welfare*weight) |>
     fgroup_by(reporting_level) |>
     fmutate(bin = new_bins(welfare = welfare,
                            weight = weight,
-                           nbins = nq)) |>
-    fungroup()
-
-
-  # if there is  more than one reporting level
-  if (no_dl > 1) {
-    ## Bins at national level ----
-    dt <-  df |>
-      ftransform(bin = new_bins(welfare = welfare,
-                                weight = weight,
-                                nbins = nq),
-                 reporting_level = "national")  |>
-      rowbind(dt)
-  }
-
-
-
+                           nbins = nq),
+  ## totals by reporting level
+            tot_pop = fsum(weight),
+            tot_wlf = fsum(wt_welfare)) |>
+    fungroup() |>
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   ## Main measures --------
-
-  dt <- dt |>
-    ## shares at the observation level ---------
+  ## shares at the observation level ---------
   ftransform(pop_share = weight/tot_pop,
-             welfare_share = (welfare*weight)/tot_wlf) |>
+             welfare_share = (wt_welfare)/tot_wlf) |>
     ## aggregate
     fgroup_by(reporting_level, bin) |>
     fsummarise(avg_welfare    = fmean(welfare, w = weight),
@@ -121,7 +111,10 @@ lorenz_table <- \(x, nq = 100) {
                welfare_share  = fsum(welfare_share),
                quantile       = fmax(welfare),
                pop            = fsum(weight)) |>
-    fungroup()
+    fungroup() |>
+    setorder(reporting_level, bin)
+
+  dt
 
 }
 
@@ -198,7 +191,7 @@ duplicate_households <- function(DT,
 
 
 
-new_bins <- \(welfare, weight, nbins) {
+new_bins_old <- \(welfare, weight, nbins) {
   # deal with NAs -----
   if (anyNA(welfare)) {
     ina      <- !is.na(welfare)
@@ -226,6 +219,46 @@ new_bins <- \(welfare, weight, nbins) {
   bins
   # bins <-  cut(p, c(0, probs), labels = FALSE)
 }
+
+
+new_bins <- function(welfare, weight, nbins = 100) {
+  # Order the data by welfare
+  o <- order(welfare)
+  welfare <- welfare[o]
+  weight  <- weight[o]
+
+  total_weight <- sum(weight)
+  bin_size     <- total_weight / nbins
+
+  bin_assignments <- integer(0)
+  current_bin     <- 1
+  accumulated     <- 0
+
+  for (i in seq_along(welfare)) {
+    wt <- weight[i]
+    while (wt > 0 && current_bin <= nbins) {
+      room <- bin_size - accumulated
+      portion <- min(wt, room)
+
+      bin_assignments <- c(bin_assignments, rep(current_bin, 1))
+      accumulated <- accumulated + portion
+      wt <- wt - portion
+
+      if (accumulated >= bin_size && current_bin < nbins) {
+        current_bin <- current_bin + 1
+        accumulated <- 0
+      }
+    }
+  }
+
+  return(bin_assignments)
+}
+
+
+
+
+
+
 
 
 

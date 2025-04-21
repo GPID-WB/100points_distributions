@@ -24,6 +24,10 @@ vers <- c(
   "20250401_2021_01_02_PROD",
   "20250401_2017_01_02_PROD")
 
+nqs  <- 100
+vers <- c(
+  "20250401_2021_01_02_PROD")
+
 
 for (i in seq_along(nqs)) {
   nq <- nqs[i]
@@ -56,6 +60,54 @@ for (i in seq_along(nqs)) {
   source("R/copy_to_p.R")
   options(op)
 }
+
+
+## !!! folders parameters: change to desired folder in pip
+version <- "20250401_2021_01_02_PROD"
+
+album_dir <-
+  fs::path("data/album", version)
+
+singles_dir <-
+  fs::path("data/singles", version)
+
+
+wld <- fs::path(album_dir, "world_100bin.qs") |>
+  qs::qread()
+
+# sorting vars
+svars <- c("country_code", "reporting_level", "welfare_type", "year", "percentile")
+
+# Grouping vars
+gvars <- c("country_code", "reporting_level", "welfare_type", "year")
+setorderv(wld,svars)
+
+g <- GRP(wld, gvars)
+
+failing <-
+  wld |>
+  ftransform(diff = welfare_share - flag(welfare_share,
+                                         g = reporting_level)) |>
+  ftransform(tag = diff < 0) |>
+  fsubset(tag == TRUE) |>
+  _[, ..gvars] |>
+  unique()
+
+failing[]
+
+
+
+
+
+
+
+wld |>
+  ftransform(diff = welfare_share - flag(welfare_share,
+                                         g = reporting_level)) |>
+  ftransform(tag = diff < 0) |>
+  fsubset(country_code == "ARG" & year == 1997)
+
+
 
 
 #
