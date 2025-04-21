@@ -80,7 +80,7 @@ lorenz_table <- \(df, nq = 100) {
 
 
   if (no_dl > 1) {
-    ## Bins at national level ----
+## Bins at national level ----
     df2 <-  copy(df)
     df2[, reporting_level := "national"]
     df <- rowbind(df, df2)
@@ -88,6 +88,21 @@ lorenz_table <- \(df, nq = 100) {
 
   ## Bins at reporting level -------
   # sort according to bins calculation method
+  setorder(df, reporting_level, welfare)
+  df[, id := .I]
+
+  df2 <- df[reporting_level == "urban"]
+
+
+  bin_df <- df2[, new_bins(welfare = welfare,
+                          weight = weight,
+                          id = id,
+                          nbins = nq),
+               by = reporting_level]
+
+
+
+
   dt <-  df |>
     setorder(reporting_level, welfare) |>
     ftransform(wt_welfare = welfare*weight) |>
@@ -118,6 +133,101 @@ lorenz_table <- \(df, nq = 100) {
 
 }
 
+#' Assign households to weighted bins (percentiles)
+#'
+#' This function assigns each household to a percentile bin using a weighted distribution,
+#' ensuring that each bin has approximately the same total weight. Households with large
+#' weights may be duplicated and split across bins to preserve monotonicity of welfare shares.
+#'
+#' @param welfare Numeric vector of household welfare (e.g., income).
+#' @param weight  Numeric vector of sampling weights (same length as welfare).
+#' @param nbins   Number of bins to divide the population into (default = 100).
+#' @param id      Optional ID vector for each observation. If NULL, it will be generated.
+#'
+#' @return A `data.table` with columns: `id`, `welfare`, `weight`, and `bin`.
+#'   The output may have more rows than the input due to household splitting.
+#'
+#' @export
+new_bins <- function(welfare, weight, id, nbins = 100, tolerance = 1e-6) {
+  stopifnot(length(welfare) == length(weight),
+            length(weight) == length(id))
+
+  # ~~~ Handle NAs ~~~
+  keep <- !is.na(welfare) & !is.na(weight)
+  welfare <- welfare[keep]
+  weight  <- weight[keep]
+  id      <- id[keep]
+
+  # ~~~ Sort by welfare ~~~
+  o <- order(welfare)
+  welfare <- welfare[o]
+  weight  <- weight[o]
+  id      <- id[o]
+
+  # ~~~ Define bin size ~~~
+  total_weight <- sum(weight)
+  bin_size     <- total_weight / nbins
+
+  # ~~~ Initialize outputs with some padding ~~~
+  n_est <- length(welfare) * 2
+  out_id      <- vector("integer", n_est)
+  out_welfare <- vector("numeric", n_est)
+  out_weight  <- vector("numeric", n_est)
+  out_bin     <- vector("integer", n_est)
+
+  j <- 1  # index for outputs
+  current_bin     <- 1
+  accumulated_bin <- 0
+
+  for (i in seq_along(welfare)) {
+    w   <- weight[i]
+    val <- welfare[i]
+    uid <- id[i]
+
+    while (w > 0) {
+      space <- bin_size - accumulated_bin
+
+      # If the last bin, allow a small tolerance
+      if (current_bin == nbins && w > space && abs(space - bin_size) < tolerance) {
+        portion <- w  # Dump remaining weight in last bin
+      } else {
+        portion <- min(w, space)
+      }
+
+      out_id[j]      <- uid
+      out_welfare[j] <- val
+      out_weight[j]  <- portion
+      out_bin[j]     <- current_bin
+
+      w <- w - portion
+      accumulated_bin <- accumulated_bin + portion
+      j <- j + 1
+
+      if (accumulated_bin >= bin_size - tolerance && current_bin < nbins) {
+        current_bin     <- current_bin + 1
+        accumulated_bin <- 0
+      }
+    }
+  }
+
+  # ~~~ Build result ~~~
+  result <- data.table::data.table(
+    id      = out_id[1:(j - 1)],
+    welfare = out_welfare[1:(j - 1)],
+    weight  = out_weight[1:(j - 1)],
+    bin     = out_bin[1:(j - 1)]
+  )
+
+  return(result)
+}
+
+
+
+
+
+
+
+
 # Wrapper Function
 duplicate_households <- function(DT,
                                  weight = "weight",
@@ -134,7 +244,7 @@ duplicate_households <- function(DT,
     welfare_share_bad <-
       lt[, diff(lt$welfare_share),
          by = reporting_level
-         ][, any(V1 < 0)]
+      ][, any(V1 < 0)]
 
     setattr(R, "welfare_share_OK", !welfare_share_bad)
     setattr(R, "threshold", threshold)
@@ -219,93 +329,6 @@ new_bins_old <- \(welfare, weight, nbins) {
   bins
   # bins <-  cut(p, c(0, probs), labels = FALSE)
 }
-
-
-#' Assign households to weighted bins (percentiles)
-#'
-#' This function assigns each household to a percentile bin using a weighted distribution,
-#' ensuring that each bin has approximately the same total weight. Households with large
-#' weights may be duplicated and split across bins to preserve monotonicity of welfare shares.
-#'
-#' @param welfare Numeric vector of household welfare (e.g., income).
-#' @param weight  Numeric vector of sampling weights (same length as welfare).
-#' @param nbins   Number of bins to divide the population into (default = 100).
-#' @param id      Optional ID vector for each observation. If NULL, it will be generated.
-#'
-#' @return A `data.table` with columns: `id`, `welfare`, `weight`, and `bin`.
-#'   The output may have more rows than the input due to household splitting.
-#'
-#' @export
-new_bins <- function(welfare, weight, id, nbins = 100) {
-  # --- Defensive setup: remove NAs and validate ---
-  if (anyNA(welfare) || anyNA(weight) || anyNA(id)) {
-    ok <- !is.na(welfare) & !is.na(weight) & !is.na(id)
-    welfare <- welfare[ok]
-    weight  <- weight[ok]
-    id      <- id[ok]
-  }
-
-  # --- Sort the data by welfare ascending ---
-  o <- order(welfare)
-  welfare <- welfare[o]
-  weight  <- weight[o]
-  id      <- id[o]
-
-  # --- Total weight and ideal bin size ---
-  total_weight <- sum(weight)
-  bin_size     <- total_weight / nbins
-
-  # --- Preallocate containers ---
-  max_size     <- 2 * length(welfare)  # upper bound for splits
-  out_id       <- vector("integer", max_size)
-  out_welfare  <- vector("numeric", max_size)
-  out_weight   <- vector("numeric", max_size)
-  out_bin      <- vector("integer", max_size)
-
-  # --- Core logic: assign bins ensuring monotonicity ---
-  current_bin <- 1
-  accumulated <- 0
-  k <- 0  # index tracker
-
-  for (i in seq_along(welfare)) {
-    w  <- weight[i]
-    wh <- welfare[i]
-
-    while (w > 0 && current_bin <= nbins) {
-      room <- bin_size - accumulated
-      assign_weight <- min(w, room)
-
-      k <- k + 1
-      out_id[k]      <- id[i]
-      out_welfare[k] <- wh
-      out_weight[k]  <- assign_weight
-      out_bin[k]     <- current_bin
-
-      accumulated <- accumulated + assign_weight
-      w <- w - assign_weight
-
-      # Advance bin if full (but stop at max bin)
-      if (accumulated >= bin_size && current_bin < nbins) {
-        current_bin <- current_bin + 1
-        accumulated <- 0
-      }
-    }
-  }
-
-  # --- Build result table using only used rows ---
-  data.table::data.table(
-    id      = out_id[1:k],
-    welfare = out_welfare[1:k],
-    weight  = out_weight[1:k],
-    bin     = out_bin[1:k]
-  )
-}
-
-
-
-
-
-
 
 
 

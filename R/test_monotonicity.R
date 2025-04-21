@@ -130,7 +130,12 @@ z |>
 
 nq <- 100
 
-df   <- pipload::pip_load_cache("ARG", 1997,
+ct <- "ARG"
+ct <- "CHN"
+
+yr <- 2010
+
+df   <- pipload::pip_load_cache(ct, yr,
                                 verbose = FALSE,
                                 version = version)
 
@@ -157,7 +162,7 @@ if (n_ids > 1) {
 }
 
 
-df[, .(welfare, weight)] |>
+df[, .(reporting_level, welfare, weight)] |>
   fwrite(fs::path(tdirp, "distribution.csv"))
 
 
