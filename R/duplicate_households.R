@@ -221,66 +221,98 @@ new_bins_old <- \(welfare, weight, nbins) {
 }
 
 
-new_bins <- function(welfare, weight, nbins = 100) {
-  # Step 1: Sort data by welfare so bins are filled from poorest to richest
-  # Percentile-type bins must be assigned in welfare order for meaningful
-  # results.
-  o <- order(welfare)
-  welfare <- welfare[o]
-  weight  <- weight[o]
+#' Assign monotonic percentile bins by splitting large weights
+#'
+#' Ensures equal-weight bins and strictly monotonic welfare share by
+#' duplicating observations when their weight spans across bins.
+#'
+#' @param welfare Numeric vector of welfare levels (e.g., income).
+#' @param weight Numeric vector of sampling weights.
+#' @param nbins Number of desired bins (default: 100).
+#' @param id Optional vector of observation IDs for tracking.
+#'
+#' @return A data.table with columns: `id` (original or repeated), and `bin`.
+#' @export
+new_bins <- function(welfare, weight, nbins = 100, id = NULL) {
+  stopifnot(length(welfare) == length(weight))
+  n <- length(welfare)
 
-  # Step 2: Compute total weight and target weight per bin WHY: We want each bin
-  # to represent an equal *share of the population*, not a count of rows.
+  if (is.null(id)) id <- seq_len(n)
+
+  # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  # Handle NAs (WELFARE OR WEIGHT)
+  # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  na_mask <- !is.na(welfare) & !is.na(weight)
+  welfare <- welfare[na_mask]
+  weight  <- weight[na_mask]
+  id      <- id[na_mask]
+
+  # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  # Sort by increasing welfare
+  # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  o        <- order(welfare)
+  welfare  <- welfare[o]
+  weight   <- weight[o]
+  id       <- id[o]
+
+  # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  # Initialize
+  # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   total_weight <- sum(weight)
-  bin_size     <- total_weight / nbins
+  bin_weight   <- total_weight / nbins
 
-  # Step 3: Set up storage and counters
-  # bin_assignments: will store the bin number for each (possibly split) row
-  # current_bin: index of the bin we're filling
-  # accumulated: running total of the weight currently assigned to current_bin
-  bin_assignments <- integer(0)
-  current_bin     <- 1
-  accumulated     <- 0
+  bins     <- integer(0)
+  new_ids  <- integer(0)
 
-  # Step 4: Loop over each household (row in original data)
-  for (i in seq_along(welfare)) {
-    wt <- weight[i]  # Total weight for this household
+  current_bin    <- 1
+  current_weight <- 0
+  i <- 1
 
-    # A household might be "too heavy" to fit in the current bin,
-    # so we may need to split it across multiple bins.
-    while (wt > 0 && current_bin <= nbins) {
+  # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  # Main loop
+  # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  while (i <= length(welfare) && current_bin <= nbins) {
+    w <- weight[i]
 
-      # Step 4a: How much room is left in the current bin?
-      # We don’t want to overfill it — we aim for evenly distributed bins.
-      room <- bin_size - accumulated
+    # Case 1: fits in current bin
+    if (current_weight + w <= bin_weight || abs(current_weight + w - bin_weight) < 1e-8) {
+      bins     <- c(bins, current_bin)
+      new_ids  <- c(new_ids, id[i])
+      current_weight <- current_weight + w
+      i <- i + 1
+    } else {
+      # Case 2: split across bin
+      remaining <- bin_weight - current_weight
+      split_ratio <- remaining / w
+      weight1 <- w * split_ratio
+      weight2 <- w - weight1
 
-      # Step 4b: How much of this household can we assign here?
-      # Portion is the smaller of the household's remaining weight or bin space left.
-      portion <- min(wt, room)
+      bins     <- c(bins, current_bin)
+      new_ids  <- c(new_ids, id[i])
 
-      # Step 4c: Assign this portion to the current bin
-      # WHY: Even if a household is split across bins, each *portion* gets a bin label.
-      bin_assignments <- c(bin_assignments, current_bin)
+      # Duplicate the leftover portion
+      welfare  <- append(welfare, welfare[i], after = i)
+      weight   <- append(weight, weight2,     after = i)
+      id       <- append(id,     id[i],       after = i)
 
-      # Step 4d: Update the bin's accumulated weight
-      accumulated <- accumulated + portion
+      weight[i] <- weight1
 
-      # Step 4e: Decrease the unassigned portion of this household's weight
-      wt <- wt - portion
+      # Advance
+      current_bin <- current_bin + 1
+      current_weight <- 0
+      i <- i + 1
+    }
 
-      # Step 4f: If the bin is full, move to next one
-      # THis Enforces our equal-weight constraint across bins.
-      if (accumulated >= bin_size && current_bin < nbins) {
-        current_bin <- current_bin + 1
-        accumulated <- 0  # reset for the next bin
-      }
+    if (current_weight >= bin_weight - 1e-6) {
+      current_bin <- current_bin + 1
+      current_weight <- 0
     }
   }
 
-  # Step 5: Return the vector of bin assignments
-  # Each entry in this vector corresponds to a portion of the original data.
-  # If splitting occurred, you’ll have more rows than the original input.
-  return(bin_assignments)
+  # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  # Return result
+  # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  data.table::data.table(id = new_ids, bin = bins)
 }
 
 
