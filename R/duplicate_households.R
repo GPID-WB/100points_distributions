@@ -148,12 +148,18 @@ lorenz_table <- \(df, nq = 100) {
 #'   The output may have more rows than the input due to household splitting.
 #'
 #' @export
-new_bins <- function(welfare, weight, nbins = 100, id = NULL, tolerance = 1e-5) {
-  # Check for NAs and clean
-  valid <- !is.na(welfare) & !is.na(weight)
-  welfare <- welfare[valid]
-  weight  <- weight[valid]
-  if (!is.null(id)) id <- id[valid]
+new_bins <- function(welfare, weight, nbins = 100, tolerance = 1e-6, id = NULL) {
+  stopifnot(length(welfare) == length(weight))
+
+
+  if (anyNA(welfare) || anyNA(weight)) {
+    valid <- !is.na(welfare) & !is.na(weight)
+    welfare <- welfare[valid]
+    weight  <- weight[valid]
+    if (!is.null(id)) id <- id[valid]
+  } else {
+    id <- if (is.null(id)) seq_along(welfare)
+  }
 
   # Order the data by welfare
   o <- order(welfare)
@@ -162,7 +168,7 @@ new_bins <- function(welfare, weight, nbins = 100, id = NULL, tolerance = 1e-5) 
   if (!is.null(id)) id <- id[o]
 
   # Define bin target size
-  total_weight <- sum(weight)
+  total_weight <- fsum(weight)
   bin_size     <- total_weight / nbins
 
   # Initialize result containers (oversized)
@@ -190,23 +196,19 @@ new_bins <- function(welfare, weight, nbins = 100, id = NULL, tolerance = 1e-5) 
         next
       }
 
+      out_id[out_index]      <- original_id
+      out_welfare[out_index] <- w
+      out_bin[out_index]     <- cur_bin
+      out_index <- out_index + 1
+
       if (wt <= room + tolerance) {
         # Fits in current bin
-        out_id[out_index]      <- original_id
-        out_welfare[out_index] <- w
         out_weight[out_index]  <- wt
-        out_bin[out_index]     <- cur_bin
-        out_index <- out_index + 1
         cur_weight <- cur_weight + wt
         break
       } else {
         # Split into current bin and remainder
-        out_id[out_index]      <- original_id
-        out_welfare[out_index] <- w
         out_weight[out_index]  <- room
-        out_bin[out_index]     <- cur_bin
-        out_index <- out_index + 1
-
         wt <- wt - room
         cur_bin <- cur_bin + 1
         cur_weight <- 0
@@ -221,6 +223,7 @@ new_bins <- function(welfare, weight, nbins = 100, id = NULL, tolerance = 1e-5) 
   )
   return(res)
 }
+
 
 
 
