@@ -73,7 +73,7 @@ clean_new_weights <- \(DT, ori_names) {
   DT <- DT[, ..ori_names]
 }
 
-lorenz_table <- \(df, nq = 100) {
+lorenz_table <- \(df, nq = 100, tolerance = 1e-6) {
   # number of data labels
   no_dl <- funique(df$reporting_level) |>
     length()
@@ -91,27 +91,17 @@ lorenz_table <- \(df, nq = 100) {
   setorder(df, reporting_level, welfare)
   df[, id := .I]
 
-  df2 <- df[reporting_level == "urban"]
-
-
-  bin_df <- df[, new_bins(welfare = welfare,
-                          weight = weight,
-                          id = id,
-                          nbins = nq),
-               by = reporting_level]
-
-
-
-
-  dt <-  df |>
-    setorder(reporting_level, welfare) |>
+  dt <-
+    df[, new_bins(welfare = welfare,
+                  weight = weight,
+                  id = id,
+                  nbins = nq,
+                  tolerance = tolerance),
+       by = reporting_level]  |>
     ftransform(wt_welfare = welfare*weight) |>
     fgroup_by(reporting_level) |>
-    fmutate(bin = new_bins(welfare = welfare,
-                           weight = weight,
-                           nbins = nq),
   ## totals by reporting level
-            tot_pop = fsum(weight),
+    fmutate(tot_pop = fsum(weight),
             tot_wlf = fsum(wt_welfare)) |>
     fungroup() |>
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -148,7 +138,163 @@ lorenz_table <- \(df, nq = 100) {
 #'   The output may have more rows than the input due to household splitting.
 #'
 #' @export
-new_bins <- function(welfare, weight, nbins = 100, tolerance = 1e-6, id = NULL) {
+new_bins1 <- function(welfare, weight, nbins = 100, tolerance = 1e-6, id = NULL) {
+  stopifnot(length(welfare) == length(weight))
+
+  # Handle NAs
+  if (anyNA(welfare) || anyNA(weight)) {
+    valid <- !is.na(welfare) & !is.na(weight)
+    welfare <- welfare[valid]
+    weight  <- weight[valid]
+    if (!is.null(id)) id <- id[valid]
+  } else {
+    id <- if (is.null(id)) seq_along(welfare) else id
+  }
+
+  # Sort by welfare
+  o <- order(welfare)
+  welfare <- welfare[o]
+  weight  <- weight[o]
+  id      <- id[o]
+
+  total_weight <- collapse::fsum(weight)
+  bin_size     <- total_weight / nbins
+
+  # Preallocate result vectors
+  out_id      <- integer(2 * length(welfare))
+  out_welfare <- numeric(2 * length(welfare))
+  out_weight  <- numeric(2 * length(welfare))
+  out_bin     <- integer(2 * length(welfare))
+
+  cur_bin    <- 1
+  cur_weight <- 0
+  out_index  <- 1
+
+  for (i in seq_along(welfare)) {
+    w  <- welfare[i]
+    wt <- weight[i]
+    id_i <- id[i]
+
+    while (wt > 0 && cur_bin <= nbins) {
+      room <- bin_size - cur_weight
+
+      if (nearly_equal(room, 0, tolerance)) {
+        cur_bin <- cur_bin + 1
+        cur_weight <- 0
+        next
+      }
+
+      take <- min(wt, room)
+
+      out_id[out_index]      <- id_i
+      out_welfare[out_index] <- w
+      out_weight[out_index]  <- take
+      out_bin[out_index]     <- cur_bin
+      out_index <- out_index + 1
+
+      wt <- wt - take
+      cur_weight <- cur_weight + take
+
+      if (wt < room || nearly_equal(wt, room, tolerance)) {
+        cur_bin <- cur_bin + 1
+        cur_weight <- 0
+      }
+    }
+  }
+
+  data.table::data.table(
+    id   = out_id[1:(out_index - 1)],
+    bin  = out_bin[1:(out_index - 1)],
+    # You can drop these two if you only want bin assignment:
+    weight = out_weight[1:(out_index - 1)],
+    welfare = out_welfare[1:(out_index - 1)]
+  )
+}
+
+
+new_bins2 <- function(welfare, weight, nbins = 100, tolerance = 1e-6, id = NULL) {
+  stopifnot(length(welfare) == length(weight))
+
+  # Handle NAs
+  if (anyNA(welfare) || anyNA(weight)) {
+    valid <- !is.na(welfare) & !is.na(weight)
+    welfare <- welfare[valid]
+    weight  <- weight[valid]
+    if (!is.null(id)) id <- id[valid]
+  } else {
+    id <- if (is.null(id)) seq_along(welfare) else id
+  }
+
+  # Sort by welfare
+  o <- order(welfare)
+  welfare <- welfare[o]
+  weight  <- weight[o]
+  id      <- id[o]
+
+  total_weight <- fsum(weight)
+  bin_size     <- total_weight / nbins
+
+  # Result containers
+  out_id      <- integer(2 * length(welfare))
+  out_welfare <- numeric(2 * length(welfare))
+  out_weight  <- numeric(2 * length(welfare))
+  out_bin     <- integer(2 * length(welfare))
+
+  cur_bin     <- 1
+  cur_weight  <- 0
+  out_index   <- 1
+  bin_people  <- integer(nbins)  # Tracks number of people per bin
+
+  for (i in seq_along(welfare)) {
+    w  <- welfare[i]
+    wt <- weight[i]
+    id_i <- id[i]
+
+    while (wt > 0 && cur_bin <= nbins) {
+      room <- bin_size - cur_weight
+
+      if (abs(room) < tolerance) {
+        cur_bin <- cur_bin + 1
+        cur_weight <- 0
+        next
+      }
+
+      take <- fmin(wt, room)
+
+      out_id[out_index]      <- id_i
+      out_welfare[out_index] <- w
+      out_weight[out_index]  <- take
+      out_bin[out_index]     <- cur_bin
+
+      out_index <- out_index + 1
+      wt <- wt - take
+      cur_weight <- cur_weight + take
+      bin_people[cur_bin] <- bin_people[cur_bin] + 1
+
+      # Optional person-count check: Ensure growth over bins
+      if (cur_bin > 1 &&
+          bin_people[cur_bin] <= bin_people[cur_bin - 1] &&
+          cur_weight >= bin_size - tolerance) {
+        # If this bin isn't growing in person count, force more splits
+        next
+      }
+
+      if (wt < room || abs(wt - room) < tolerance) {
+        cur_bin <- cur_bin + 1
+        cur_weight <- 0
+      }
+    }
+  }
+
+  data.table::data.table(
+    id      = out_id[1:(out_index - 1)],
+    bin     = out_bin[1:(out_index - 1)],
+    weight  = out_weight[1:(out_index - 1)],
+    welfare = out_welfare[1:(out_index - 1)]
+  )
+}
+
+new_bins3 <- function(welfare, weight, nbins = 100, tolerance = 1e-6, id = NULL) {
   stopifnot(length(welfare) == length(weight))
 
 
@@ -224,7 +370,175 @@ new_bins <- function(welfare, weight, nbins = 100, tolerance = 1e-6, id = NULL) 
   return(res)
 }
 
+# this one works
+new_bins4 <- function(welfare, weight, nbins = 100, tolerance = 1e-6, id = NULL) {
+  stopifnot(length(welfare) == length(weight))
 
+  # Handle NAs
+  if (anyNA(welfare) || anyNA(weight)) {
+    valid <- !is.na(welfare) & !is.na(weight)
+    welfare <- welfare[valid]
+    weight  <- weight[valid]
+    if (!is.null(id)) id <- id[valid]
+  } else {
+    id <- if (is.null(id)) seq_along(welfare) else id
+  }
+
+  # Sort by welfare
+  o <- order(welfare)
+  welfare <- welfare[o]
+  weight  <- weight[o]
+  id      <- id[o]
+
+  total_weight <- collapse::fsum(weight)
+  bin_size     <- total_weight / nbins
+
+  # Preallocate result vectors
+  out_id      <- integer(2 * length(welfare))
+  out_welfare <- numeric(2 * length(welfare))
+  out_weight  <- numeric(2 * length(welfare))
+  out_bin     <- integer(2 * length(welfare))
+
+  cur_bin    <- 1
+  cur_weight <- 0
+  out_index  <- 1
+
+  for (i in seq_along(welfare)) {
+    w  <- welfare[i]
+    wt <- weight[i]
+    id_i <- id[i]
+
+    while (wt > 0 && cur_bin <= nbins) {
+      room <- bin_size - cur_weight
+
+      if (abs(room) < tolerance) {
+        cur_bin <- cur_bin + 1
+        cur_weight <- 0
+        next
+      }
+
+      take <- min(wt, room)
+
+      out_id[out_index]      <- id_i
+      out_welfare[out_index] <- w
+      out_weight[out_index]  <- take
+      out_bin[out_index]     <- cur_bin
+      out_index <- out_index + 1
+
+      wt <- wt - take
+      cur_weight <- cur_weight + take
+
+      if (cur_weight >= bin_size - tolerance) {
+        cur_bin <- cur_bin + 1
+        cur_weight <- 0
+      }
+    }
+  }
+
+  data.table::data.table(
+    id   = out_id[1:(out_index - 1)],
+    bin  = out_bin[1:(out_index - 1)],
+    # You can drop these two if you only want bin assignment:
+    weight = out_weight[1:(out_index - 1)],
+    welfare = out_welfare[1:(out_index - 1)]
+  )
+}
+
+
+new_bins <- function(welfare, weight, nbins = 100, tolerance = 1e-6, id = NULL) {
+  stopifnot(length(welfare) == length(weight))
+
+  # Handle NAs
+  if (anyNA(welfare) || anyNA(weight)) {
+    valid <- !is.na(welfare) & !is.na(weight)
+    welfare <- welfare[valid]
+    weight  <- weight[valid]
+    if (!is.null(id)) id <- id[valid]
+  } else {
+    id <- if (is.null(id)) seq_along(welfare) else id
+  }
+
+  # Sort by welfare
+  o <- order(welfare)
+  welfare <- welfare[o]
+  weight  <- weight[o]
+  id      <- id[o]
+
+  total_weight <- fsum(weight)
+  bin_size     <- total_weight / nbins
+
+  # Preallocate result vectors
+  out_id      <- integer(2 * length(welfare))
+  out_welfare <- numeric(2 * length(welfare))
+  out_weight  <- numeric(2 * length(welfare))
+  out_bin     <- integer(2 * length(welfare))
+
+  cur_bin    <- 1
+  cur_weight <- 0 # current among ot people in a bin
+  out_index  <- 1 # index of the new vectors
+
+  # loop over each row of the original data.
+  for (i in seq_along(welfare)) {
+    w  <- welfare[i]
+    wt <- weight[i]
+    id_i <- id[i]
+
+    # as long as the weight to allocate is positive and
+    # the value of the current bin is smaller or equal to
+    # the number of bins proceed
+    while (wt > 0 && cur_bin <= nbins) {
+      # room in the bin available after subtracting
+      # the people that is already in there.
+      room <- bin_size - cur_weight
+
+      # Move to next bin if very close to full
+      if (abs(room) < tolerance) {
+        cur_bin <- cur_bin + 1
+        cur_weight <- 0
+        next
+      }
+
+      #
+      take <- min(wt, room)
+
+      out_id[out_index]      <- id_i
+      out_welfare[out_index] <- w
+      out_weight[out_index]  <- take
+      out_bin[out_index]     <- cur_bin
+      out_index <- out_index + 1
+
+      wt <- wt - take
+      cur_weight <- cur_weight + take
+
+      if (cur_weight >= bin_size - tolerance) {
+        cur_bin <- cur_bin + 1
+        cur_weight <- 0 # reset and go to the next bin
+      }
+    }
+  }
+
+  # Handle any leftover weight that couldn't be assigned due to tolerance
+  if (cur_bin > nbins && wt > 0) {
+    # Add remaining weight to the last bin
+    out_id[out_index]      <- id_i
+    out_welfare[out_index] <- w
+    out_weight[out_index]  <- wt
+    out_bin[out_index]     <- nbins
+    out_index <- out_index + 1
+  }
+
+  # Return result
+  data.table::data.table(
+    id      = out_id[1:(out_index - 1)],
+    bin     = out_bin[1:(out_index - 1)],
+    weight  = out_weight[1:(out_index - 1)],
+    welfare = out_welfare[1:(out_index - 1)]
+  )
+}
+
+
+
+nearly_equal <- function(x, y, tol = 1e-12) abs(x - y) < tol
 
 
 

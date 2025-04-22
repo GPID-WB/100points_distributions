@@ -132,8 +132,12 @@ nq <- 100
 
 ct <- "ARG"
 ct <- "CHN"
+ct <- "AGO"
 
+yr <- 1997
 yr <- 2010
+yr <- 2000
+
 
 df   <- pipload::pip_load_cache(ct, yr,
                                 verbose = FALSE,
@@ -172,16 +176,19 @@ if (n_ids > 1) {
 # lt    <- attr(R, "lorenz")
 # ws_OK <- attr(R, "welfare_share_OK")
 # lt <- lorenz_table(df, nq = 1000) |>
-lt <- lorenz_table(df, nq = nq) |>
-  # fix welfare share.
-  fix_welfare_share(nq = nq)
+lt <- lorenz_table(df, nq = nq)
+# |>
+# #   # fix welfare share.
+#   fix_welfare_share(nq = nq)
 
 
 lt |>
   ftransform(diff = welfare_share - flag(welfare_share,
                                          g = reporting_level) ) |>
   ftransform(tag = diff < 0) |>
-  fsubset(tag == TRUE)
+  fsubset(tag == TRUE) |>
+  # setorder(diff) |>
+  tail()
 
 
 

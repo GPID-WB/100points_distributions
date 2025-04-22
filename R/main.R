@@ -88,7 +88,7 @@ failing <-
   wld |>
   ftransform(diff = welfare_share - flag(welfare_share,
                                          g = reporting_level)) |>
-  ftransform(tag = diff < 0) |>
+  ftransform(tag = diff < 1e-8) |>
   fsubset(tag == TRUE) |>
   _[, ..gvars] |>
   unique()

@@ -139,9 +139,10 @@ get_micro_dist <- function(pl) {
   # R  <- duplicate_households(df)
   # lt    <- attr(R, "lorenz")
   # ws_OK <- attr(R, "welfare_share_OK")
-  lt <- lorenz_table(df, nq = nq) |>
-  # fix welfare share.
-    fix_welfare_share(nq = nq)
+  lt <- lorenz_table(df, nq = nq)
+  # |>
+  # # fix welfare share.
+  #   fix_welfare_share(nq = nq)
 
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   ## Censoring --------
