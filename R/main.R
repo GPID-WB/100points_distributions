@@ -24,10 +24,10 @@ vers <- c(
   "20250401_2021_01_02_PROD",
   "20250401_2017_01_02_PROD")
 
-nqs  <- 100
-vers <- c(
-  "20250401_2021_01_02_PROD")
-
+# nqs  <- 100
+# vers <- c(
+#   "20250401_2021_01_02_PROD")
+#
 
 for (i in seq_along(nqs)) {
   nq <- nqs[i]
@@ -36,9 +36,6 @@ for (i in seq_along(nqs)) {
   popshare <- seq(from = 1 / nq,
                   to = 1,
                   by = 1 / nq)
-
-
-
   source("R/init.R")
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   # Get 100 bin per data type   ---------
@@ -46,20 +43,20 @@ for (i in seq_along(nqs)) {
 
   # source("R/gd_100.R")
   source("R/micro_bin_100.R")
-
   # source("R/rur_urb_100_national.R")
   source("R/append_singles.R")
   source("R/labels_stata.R")
-
-  if (require(pushoverr)) {
-    msg <- paste("Done creating singles and album for", version, "and", nq, "bins",
-                 sep = " ")
-    pushoverr::pushover(msg)
-  }
-
   source("R/copy_to_p.R")
+
   options(op)
 }
+
+if (require(pushoverr)) {
+  msg <- paste("Done creating singles and album for", version, "and", nq, "bins",
+               sep = " ")
+  pushoverr::pushover(msg)
+}
+
 
 
 ## !!! folders parameters: change to desired folder in pip
@@ -86,9 +83,9 @@ g <- GRP(wld, gvars)
 
 failing <-
   wld |>
-  ftransform(diff = welfare_share - flag(welfare_share,
-                                         g = reporting_level)) |>
-  ftransform(tag = diff < 1e-8) |>
+  ftransform(diff = welfare_share - flag(welfare_share, g = g, t = percentile)) |>
+  # fsubset(country_code %in% c("CHN", "ARG", "AGO")) |>
+  ftransform(tag = diff < -1e-8) |>
   fsubset(tag == TRUE) |>
   _[, ..gvars] |>
   unique()
@@ -102,11 +99,11 @@ failing[]
 
 
 wld |>
+  fsubset(country_code %in% c("CHN", "ARG", "AGO")) |>
   ftransform(diff = welfare_share - flag(welfare_share,
                                          g = reporting_level)) |>
   ftransform(tag = diff < 0) |>
   fsubset(country_code == "ARG" & year == 1997)
-
 
 
 

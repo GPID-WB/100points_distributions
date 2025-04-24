@@ -35,34 +35,34 @@ dt[, (vars) := tstrsplit(file_nosynth, split = "_")]
 bins <- dt[, unique(bins)]
 
 # loop over bin groups
-for (b in seq_along(bins)) {
 
-  patter         <- glue("{bins[[b]]}")
-  selected_files <- grep(patter, files_name, value = TRUE)
+patter         <- glue("{nq}bin")
+selected_files <- grep(patter, files_name, value = TRUE)
 
-  if (length(selected_files) == 0) next # skip and go to next iteration
+if (length(selected_files) == 0) next # skip and go to next iteration
 
-  file_paths     <- fs::path(singles_dir, selected_files, ext = ext)
+file_paths     <- fs::path(singles_dir, selected_files, ext = ext)
 
-  ### load data and append ---------
-  ldist <- purrr::map(file_paths, qs::qread, .progress = TRUE)
+### load data and append ---------
+ldist <- purrr::map(file_paths, qs::qread, .progress = TRUE)
+names(ldist) <- selected_files
 
-  whole <- rbindlist(ldist, use.names = TRUE, fill = TRUE)
-  whole[, year := as.numeric(year)]
-  setnames(whole, "bin", "percentile")
-  ovars <- c(
-    "country_code",
-    "year",
-    "reporting_level",
-    "welfare_type",
-    "percentile"
-  )
-  setorderv(whole, ovars)
-  setcolorder(whole, ovars)
 
-  qs::qsave(whole, file = fs::path(album_dir, glue("world_{patter}"), ext = ext))
+whole <- rbindlist(ldist, use.names = TRUE, fill = TRUE)
+whole[, year := as.numeric(year)]
+setnames(whole, "bin", "percentile")
+ovars <- c(
+  "country_code",
+  "year",
+  "reporting_level",
+  "welfare_type",
+  "percentile"
+)
+setorderv(whole, ovars)
+setcolorder(whole, ovars)
 
-}
+qs::qsave(whole, file = fs::path(album_dir, glue("world_{patter}"), ext = ext))
+
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Save in other formats   ---------
@@ -70,24 +70,16 @@ for (b in seq_along(bins)) {
 
 
 # Get qs world files
-fs::dir_ls(path = album_dir,
-           regexp = "world.*qs$") |>
-  # load data
-  map(qs::qread, .progress = TRUE) |>
-  # get file names, remove qs, and save as dta
-  {\(.) walk2(.x = names(.),
-              .y = .,
-              .f = ~{
-                nm <- fs::path_ext_remove(.x)
-                # save ad dta
-                haven::write_dta(data = .y,
-                                 path = fs::path(nm, ext = "dta"))
-                # save as csv
-                readr::write_csv(x = .y,
-                                 file = fs::path(nm, ext = "csv"))
-              })
-    }()
-
+fn <- fs::path(album_dir, glue("world_{nq}bin.qs"))
+y  <- qs::qread(fn)
+nm <- fs::path_ext_remove(fn)
+# save ad dta
+haven::write_dta(data = y,
+                 path = fs::path(nm, ext = "dta"))
+# # save as csv
+# readr::write_csv(x = y,
+#                  file = fs::path(nm, ext = "csv"))
+#
 
 if (require(pushoverr)) {
   pushoverr::pushover("Done creating world files")

@@ -57,7 +57,8 @@ fpf[is.na(reporting_year),
 # fpf <- fpf[st]
 
 
-# fpf <- fpf[country_code %in% c("SOM", "COL") & surveyid_year == 2017]
+# fpf <- fpf[country_code %in% c("CHN", "ARG", "AGO")]
+# fpf <- fpf[country_code %in% c("AGO")]
 # fpf <- fpf[country_code %in% c("POL") & surveyid_year == 2004]
 # fpf <- fpf[country_code %in% c("POL")]
 

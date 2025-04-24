@@ -130,18 +130,22 @@ z |>
 
 nq <- 100
 
-ct <- "ARG"
 ct <- "CHN"
 ct <- "AGO"
+ct <- "ARG"
+ct <- "ALB"
 
-yr <- 1997
 yr <- 2010
 yr <- 2000
+yr <- 1997
+yr <- 1996
 
 
 df   <- pipload::pip_load_cache(ct, yr,
                                 verbose = FALSE,
                                 version = version)
+wt <- df[1, welfare_type] |>
+  as.character()
 
 setorder(df,
          imputation_id,
@@ -181,10 +185,9 @@ lt <- lorenz_table(df, nq = nq)
 # #   # fix welfare share.
 #   fix_welfare_share(nq = nq)
 
-
+g <- GRP(lt, ~ reporting_level)
 lt |>
-  ftransform(diff = welfare_share - flag(welfare_share,
-                                         g = reporting_level) ) |>
+  ftransform(diff = welfare_share - flag(welfare_share, g = g, t = bin) ) |>
   ftransform(tag = diff < 0) |>
   fsubset(tag == TRUE) |>
   # setorder(diff) |>
@@ -192,6 +195,76 @@ lt |>
 
 
 
-arg <- wld[country_code == "ARG" & year == 1997, names(lt)]
+f <- paste(ct, yr, wt, "100bin", sep = "_")
 
-waldo::compare(arg, lt)
+dt <-
+  fs::dir_ls(singles_dir, regexp = f) |>
+  qs::qread() |>
+  _[, reporting_level := as.character(reporting_level)]
+
+wld <- fs::path(album_dir, "world_100bin.qs") |>
+  qs::qread() |>
+  frename(bin = percentile) |>
+  _[, reporting_level := as.character(reporting_level)]
+
+dt2 <- wld[country_code   == ct &
+             year         == yr &
+             welfare_type == wt ]
+
+
+waldo::compare(dt, dt2)
+
+
+
+setorder(dt,bin)
+setorder(d2,bin)
+
+g <- GRP(dt, ~ reporting_level)
+dt2 |>
+  ftransform(diff = welfare_share - flag(welfare_share, g = g, t = bin) ) |>
+  ftransform(tag = diff < -1e-8) |>
+  fsubset(tag == TRUE) |>
+  # setorder(diff) |>
+  tail()
+
+
+
+
+# sorting vars
+svars <- c("country_code", "reporting_level", "welfare_type", "year", "bin")
+
+# Grouping vars
+gvars <- c("country_code", "reporting_level", "welfare_type", "year")
+setorderv(wld,svars)
+
+
+
+g <- GRP(wld, gvars)
+failing <-
+  wld |>
+  ftransform(diff = welfare_share - flag(welfare_share, g = g, t = bin)) |>
+  # fsubset(country_code %in% c("CHN", "ARG", "AGO")) |>
+  ftransform(tag = diff < 0) |>
+  fsubset(tag == TRUE) |>
+  _[, ..gvars] |>
+  unique()
+
+failing[]
+
+
+
+
+
+
+
+
+
+
+
+
+wld <- fs::path(album_dir, "world_100bin.dta") |>
+  haven::read_dta() |>
+  frename(bin = percentile) |>
+  ftransform(reporting_level = as.character(reporting_level)) |>
+  qDT()
+
