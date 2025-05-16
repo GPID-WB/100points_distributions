@@ -1,9 +1,6 @@
 
 
 library(fastverse)
-library(furrr)
-library(progressr)
-
 
 ## Set for parallel processing
 ## Keep half cores for processes
@@ -69,55 +66,47 @@ countries <-
   countries |>
   sort(decreasing = FALSE)
 
-n_cores <- floor((availableCores() - 1) / 2) - 1
-
-plan(multisession, workers = n_cores)
-
 # countries <- "NGA"
-years <- 2018:2024
 years <- 1980:2025
+years <- 2023:2025
 # pls <- c(1:5)
 
 # Run by LInes with Future ---------
 tictoc::tic()
-force <- FALSE
-with_progress({
-  p <- progressor(steps = length(pls))
+force <- TRUE
+purrr::walk(pls, \(pl) {
 
-  future_walk(pls,
-              \(pl){
-                p()
-                # cli::cli_alert_info("working on {ct}")
-                nfile_name <- paste0(pl, "_1kbins_lineup")
-                fst_file <-
-                  new_dir |>
-                  fs::path(nfile_name, ext = "fst")
+    nfile_name <- paste0(pl, "_1kbins_lineup")
+    fst_file <-
+      new_dir |>
+      fs::path(nfile_name, ext = "fst")
 
-                dta_file <-
-                  new_dir |>
-                  fs::path(nfile_name, ext = "dta")
+    dta_file <-
+      new_dir |>
+      fs::path(nfile_name, ext = "dta")
 
-                if (!fs::file_exists(fst_file) || force == TRUE) {
-                  lt <- pipapi::pip(povline = pl,
-                                   lkup = lkup,
-                                   fill_gaps = TRUE,
-                                   year = years)
-                  fst::write_fst(lt, fst_file)
-                  # haven::write_dta(lt, dta_file)
-                }
-              },
-              .options = furrr_options(seed = TRUE)
+    if (!fs::file_exists(fst_file) || force == TRUE) {
+      lt <- pipapi::pip(
+        povline = pl,
+        lkup = lkup,
+        fill_gaps = TRUE,
+        year = years
+      )
+      fst::write_fst(lt, fst_file)
+      # haven::write_dta(lt, dta_file)
+    }
+  },
+  .progress = TRUE
   )
-})
 
 
 if (require(pushoverr)) {
   pushoverr::pushover("Done with 1kbins")
 }
 
-plan(sequential)
 toc <- tictoc::toc()
-toc
+(toc$toc - toc$tic)/60
+
 
 ### convert o Stata format ---------
 
@@ -134,7 +123,7 @@ cols <- c(
 
 tictoc::tic()
 
-force = FALSE
+force = TRUE
 fst_files <- new_dir |>
   fs::dir_ls(regexp = "fst$",
              recurse = FALSE,
@@ -182,161 +171,4 @@ if (require(pushoverr)) {
 
 
 
-
-
-
-
-
-
-
-# Run by countries with Future ---------
-
-with_progress({
-  p <- progressor(steps = length(countries))
-
-  future_walk(countries,
-             \(ct){
-               p()
-               # cli::cli_alert_info("working on {ct}")
-               nfile_name <- paste0(ct, "_1kbins_lineup")
-               fst_file <-
-                 new_dir |>
-                 fs::path(nfile_name, ext = "fst")
-
-               dta_file <-
-                 new_dir |>
-                 fs::path(nfile_name, ext = "dta")
-
-               if (!fs::file_exists(fst_file)) {
-                 lt <-
-                   purrr::map(pls,
-                          \(x) {
-                            pipapi::pip(country   = ct,
-                                        povline   = x,
-                                        lkup      = lkup,
-                                        fill_gaps = TRUE)
-                          }) |>
-                   rbindlist(use.names = TRUE, fill = TRUE)
-
-                 fst::write_fst(lt, fst_file)
-                 haven::write_dta(lt, dta_file)
-               }
-             },
-             .options = furrr_options(seed = TRUE)
-             )
-})
-
-
-if (require(pushoverr)) {
-  pushoverr::pushover("Done with 1kbins")
-}
-
-plan(sequential)
-
-
-
-
-x <- "PRY_1kbins_lineup"
-
-dt <-
-  fs::path(new_dir, x, ext = "fst") |>
-  fst::read_fst(as.data.table = TRUE)
-
-qsu(dt, poverty_line ~ reporting_year)
-
-
-
-# only IND ---------
-
-tictoc::tic()
-with_progress({
-  p <- progressor(steps = length(pls))
-  ct <- "IND"
-  lt <-
-    future_map(pls,
-               \(.) {
-                 pipapi::pip(country = ct,
-                             povline = .,
-                             lkup = lkup,
-                             fill_gaps = TRUE)
-               },
-               .options = )
-})
-
-tt <- tictoc::toc()
-
-lt <- rbindlist(lt)
-
-nfile_name <- paste0(ct, "_1kbins_lineup")
-nfile_path <-
-  new_dir |>
-  fs::path(nfile_name, ext = "fst")
-
-fst::write_fst(lt, nfile_path)
-plan(sequential)
-
-
-# Run Sequentially -------------
-
-for (i in seq_along(countries)) {
-  ct <- countries[i]
-  cli::cli_alert_info("working on {ct}")
-  nfile_name <- paste0(ct, "_1kbins_lineup")
-  nfile_path <-
-    new_dir |>
-    fs::path(nfile_name, ext = "fst")
-
-  if (fs::file_exists(nfile_path)) next
-
-  lt <-
-    lapply(cli::cli_progress_along(pls),
-           \(.) {
-             pipapi::pip(country = ct,
-                         povline = .,
-                         lkup = lkup,
-                         fill_gaps = TRUE)
-           }) |>
-    rbindlist()
-
-  fst::write_fst(lt, nfile_path)
-}
-
-if (require(pushoverr)) {
-  pushoverr::pushover("Done with 1kbins")
-}
-
-
-
-# save to dta -------
-
-
-save <- TRUE
-
-if (save) {
-
-  file_names <- new_dir |>
-    fs::dir_ls(type = "file",
-               regexp = "fst$") |>
-    fs::path_file() |>
-    fs::path_ext_remove() |>
-    sort()
-
-  purrr::map(cli::cli_progress_along(file_names),
-             \(.) {
-               x <- file_names[.]
-               dta_name <- fs::path(new_dir, x, ext = "dta")
-               if (!fs::file_exists(dta_name)) {
-                 fs::path(new_dir, x, ext = "fst") |>
-                   fst::read_fst()
-               } else {
-                 NULL
-               }
-             }) |>
-    purrr::walk2(.y = file_names,
-                 .f = \(x, y) {
-                   dta_name <- fs::path(new_dir, y, ext = "dta")
-                   if (!fs::file_exists(dta_name))
-                     haven::write_dta(x, fs::path(new_dir, y, ext = "dta"))
-                 })
-}
 
