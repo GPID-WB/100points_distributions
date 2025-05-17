@@ -1,6 +1,8 @@
 
 
 library(fastverse)
+library(furrr)
+library(progressr)
 
 ## Set for parallel processing
 ## Keep half cores for processes
@@ -17,6 +19,7 @@ if (!"lkups" %in% ls() || isTRUE(force)) {
     fs::path()
   fs::dir_ls(data_dir, recurse = FALSE)
 }
+options("pipapi.query_live_data" = TRUE)
 
 version  <- "20240326_2017_01_02_PROD"
 version  <- "20240429_2017_01_02_INT"
@@ -66,6 +69,10 @@ countries <-
   countries |>
   sort(decreasing = FALSE)
 
+
+n_cores <- floor((availableCores() - 1) / 2) - 1
+plan(multisession, workers = n_cores)
+
 # countries <- "NGA"
 years <- 1980:2025
 years <- 2023:2025
@@ -74,36 +81,41 @@ years <- 2023:2025
 # Run by LInes with Future ---------
 tictoc::tic()
 force <- TRUE
-purrr::walk(pls, \(pl) {
+with_progress({
+  p <- progressor(steps = length(pls))
 
-    nfile_name <- paste0(pl, "_1kbins_lineup")
-    fst_file <-
-      new_dir |>
-      fs::path(nfile_name, ext = "fst")
+  future_walk(pls,
+              \(pl){
+                p()
+                # cli::cli_alert_info("working on {ct}")
+                nfile_name <- paste0(pl, "_1kbins_lineup")
+                fst_file <-
+                  new_dir |>
+                  fs::path(nfile_name, ext = "fst")
 
-    dta_file <-
-      new_dir |>
-      fs::path(nfile_name, ext = "dta")
+                dta_file <-
+                  new_dir |>
+                  fs::path(nfile_name, ext = "dta")
 
-    if (!fs::file_exists(fst_file) || force == TRUE) {
-      lt <- pipapi::pip(
-        povline = pl,
-        lkup = lkup,
-        fill_gaps = TRUE,
-        year = years
-      )
-      fst::write_fst(lt, fst_file)
-      # haven::write_dta(lt, dta_file)
-    }
-  },
-  .progress = TRUE
+                if (!fs::file_exists(fst_file) || force == TRUE) {
+                  lt <- pipapi::pip(povline = pl,
+                                    lkup = lkup,
+                                    fill_gaps = TRUE,
+                                    year = years)
+                  fst::write_fst(lt, fst_file)
+                  # haven::write_dta(lt, dta_file)
+                }
+              },
+              .options = furrr_options(seed = TRUE)
   )
+})
 
 
 if (require(pushoverr)) {
   pushoverr::pushover("Done with 1kbins")
 }
 
+plan(sequential)
 toc <- tictoc::toc()
 (toc$toc - toc$tic)/60
 
