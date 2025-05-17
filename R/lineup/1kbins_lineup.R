@@ -19,7 +19,7 @@ if (!"lkups" %in% ls() || isTRUE(force)) {
     fs::path()
   fs::dir_ls(data_dir, recurse = FALSE)
 }
-options("pipapi.query_live_data" = TRUE)
+
 
 version  <- "20240326_2017_01_02_PROD"
 version  <- "20240429_2017_01_02_INT"
@@ -65,6 +65,18 @@ rt <-
 
 pls <- rt$new_pl
 
+
+split_vector <- function(vec, x) {
+  n <- ceiling(length(vec) / x)
+  split(vec, rep(1:n, each = x, length.out = length(vec)))
+}
+
+pls2 <- split_vector(pls, 100)
+length(pls2)  # Number of chunks
+sapply(pls2, length)  # Length of each chunk
+
+
+
 countries <-
   countries |>
   sort(decreasing = FALSE)
@@ -79,12 +91,13 @@ years <- 2023:2025
 # pls <- c(1:5)
 
 # Run by LInes with Future ---------
+options("pipapi.query_live_data" = FALSE)
 tictoc::tic()
 force <- TRUE
 with_progress({
-  p <- progressor(steps = length(pls))
+  p <- progressor(steps = length(pls2))
 
-  future_walk(pls,
+  future_walk(pls2,
               \(pl){
                 p()
                 # cli::cli_alert_info("working on {ct}")
@@ -97,12 +110,16 @@ with_progress({
                   new_dir |>
                   fs::path(nfile_name, ext = "dta")
 
-                if (!fs::file_exists(fst_file) || force == TRUE) {
-                  lt <- pipapi::pip(povline = pl,
+                if (!any(fs::file_exists(fst_file)) || force == TRUE) {
+                  dt <- pipapi::pip(povline = pl,
                                     lkup = lkup,
                                     fill_gaps = TRUE,
                                     year = years)
-                  fst::write_fst(lt, fst_file)
+                  lt <- split(dt, by = "poverty_line")
+                  lapply(lt, \(.) {
+                    fst::write_fst(., fst_file)
+                  })
+
                   # haven::write_dta(lt, dta_file)
                 }
               },
