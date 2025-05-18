@@ -24,8 +24,8 @@ if (!"lkups" %in% ls() || isTRUE(force)) {
 version  <- "20240326_2017_01_02_PROD"
 version  <- "20240429_2017_01_02_INT"
 version  <- "20240627_2017_01_02_PROD"
-version  <- "20250401_2021_01_02_PROD"
 version  <- "20250401_2017_01_02_PROD"
+version  <- "20250401_2021_01_02_PROD"
 
 new_dir <-
   fs::path("p:/03.pip/estimates/1kbins_lineup", version) |>
@@ -86,8 +86,9 @@ n_cores <- floor((availableCores() - 1) / 2) - 1
 plan(multisession, workers = n_cores)
 
 # countries <- "NGA"
-years <- 1980:2025
 years <- 2023:2025
+years <- 1980:2025
+years <- "ALL"
 # pls <- c(1:5)
 
 # Run by LInes with Future ---------
@@ -97,7 +98,7 @@ force <- TRUE
 with_progress({
   p <- progressor(steps = length(pls2))
 
-  future_walk(pls2,
+  passed <- future_map(pls2,
               \(pl){
                 p()
                 # cli::cli_alert_info("working on {ct}")
@@ -111,14 +112,29 @@ with_progress({
                   fs::path(nfile_name, ext = "dta")
 
                 if (!any(fs::file_exists(fst_file)) || force == TRUE) {
-                  dt <- pipapi::pip(povline = pl,
-                                    lkup = lkup,
-                                    fill_gaps = TRUE,
-                                    year = years)
-                  lt <- split(dt, by = "poverty_line")
-                  lapply(lt, \(.) {
-                    fst::write_fst(., fst_file)
-                  })
+
+                  tryCatch(
+                    expr = {
+                      dt <- pipapi::pip(povline = pl,
+                                        lkup = lkup,
+                                        fill_gaps = TRUE,
+                                        year = years)
+                      lt <- split(dt, by = "poverty_line")
+                      lapply(lt, \(.) {
+                        fst::write_fst(., fst_file)
+                      })
+                      TRUE
+                    }, # end of expr section
+
+                    error = function(e) {
+                      FALSE
+                      }, # end of error section
+
+                    warning = function(w) {
+                      FALSE
+                    } # end of finally section
+
+                  ) # End of trycatch
 
                   # haven::write_dta(lt, dta_file)
                 }
@@ -136,6 +152,7 @@ plan(sequential)
 toc <- tictoc::toc()
 (toc$toc - toc$tic)/60
 
+which(passed == FALSE)
 
 ### convert o Stata format ---------
 
@@ -159,19 +176,32 @@ fst_files <- new_dir |>
              type = "file")
 
   purrr::map(fst_files, \(x) {
-    y <- fst::read_fst(x,
-                       columns  = cols,
-                       as.data.table = TRUE)
+    tryCatch(
+      expr = {
+        # Your code...
+        y <- fst::read_fst(x,
+                           columns  = cols,
+                           as.data.table = TRUE)
 
-    dta_file <- x |>
-      fs::path_ext_remove() |>
-      fs::path(ext = "dta")
+        dta_file <- x |>
+          fs::path_ext_remove() |>
+          fs::path(ext = "dta")
 
-    if (force == TRUE || !fs::file_exists(dta_file)) {
-      haven::write_dta(y, dta_file)
-    }
-    y
-    },
+        if (force == TRUE || !fs::file_exists(dta_file)) {
+          haven::write_dta(y, dta_file)
+        }
+        y
+
+      }, # end of expr section
+
+      error = function(e) {
+        NULL
+      }, # end of error section
+
+      warning = function(w) {
+        NULL
+      } # end of finally section
+    )},
     .progress = TRUE) |>
   rbindlist() |>
   setorderv(cols = c("country_code",
