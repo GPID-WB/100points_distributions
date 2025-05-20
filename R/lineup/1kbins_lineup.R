@@ -1,8 +1,8 @@
 
 
 library(fastverse)
-library(furrr)
-library(progressr)
+# library(furrr)
+# library(progressr)
 
 ## Set for parallel processing
 ## Keep half cores for processes
@@ -65,11 +65,16 @@ rt <-
 
 pls <- rt$new_pl
 
+pls <- round(pls, 2) |>
+  unique()
+
 
 split_vector <- function(vec, x) {
   n <- ceiling(length(vec) / x)
   split(vec, rep(1:n, each = x, length.out = length(vec)))
 }
+
+
 
 pls2 <- split_vector(pls, 100)
 length(pls2)  # Number of chunks
@@ -82,79 +87,12 @@ countries <-
   sort(decreasing = FALSE)
 
 
-n_cores <- floor((availableCores() - 1) / 2) - 1
-plan(multisession, workers = n_cores)
-
-# countries <- "NGA"
-years <- 2023:2025
-years <- 1980:2025
-years <- "ALL"
-# pls <- c(1:5)
-
-# Run by LInes with Future ---------
-options("pipapi.query_live_data" = FALSE)
-tictoc::tic()
-force <- TRUE
-with_progress({
-  p <- progressor(steps = length(pls2))
-
-  passed <- future_map(pls2,
-              \(pl){
-                p()
-                # cli::cli_alert_info("working on {ct}")
-                nfile_name <- paste0(pl, "_1kbins_lineup")
-                fst_file <-
-                  new_dir |>
-                  fs::path(nfile_name, ext = "fst")
-
-                dta_file <-
-                  new_dir |>
-                  fs::path(nfile_name, ext = "dta")
-
-                if (!any(fs::file_exists(fst_file)) || force == TRUE) {
-
-                  tryCatch(
-                    expr = {
-                      dt <- pipapi::pip(povline = pl,
-                                        lkup = lkup,
-                                        fill_gaps = TRUE,
-                                        year = years)
-                      lt <- split(dt, by = "poverty_line")
-                      lapply(lt, \(.) {
-                        fst::write_fst(., fst_file)
-                      })
-                      TRUE
-                    }, # end of expr section
-
-                    error = function(e) {
-                      FALSE
-                      }, # end of error section
-
-                    warning = function(w) {
-                      FALSE
-                    } # end of finally section
-
-                  ) # End of trycatch
-
-                  # haven::write_dta(lt, dta_file)
-                }
-              },
-              .options = furrr_options(seed = TRUE)
-  )
-})
+# n_cores <- floor((availableCores() - 1) / 2) - 1
+# n_cores <- availableCores() - 2
+# n_cores <- 4
+# plan(multisession, workers = n_cores)
 
 
-if (require(pushoverr)) {
-  pushoverr::pushover("Done with 1kbins")
-}
-
-plan(sequential)
-toc <- tictoc::toc()
-(toc$toc - toc$tic)/60
-
-which(passed == FALSE)
-
-### convert o Stata format ---------
 
 cols <- c(
   "country_code",
@@ -166,6 +104,75 @@ cols <- c(
   "poverty_gap",
   "poverty_severity"
 )
+
+
+
+# countries <- "NGA"
+years <- 2023:2025
+years <- "ALL"
+years <- 1980:2025
+# pls <- c(1:5)
+# pls2 <- pls2[1:6]
+# Run by LInes with Future ---------
+options("pipapi.query_live_data" = FALSE)
+tictoc::tic()
+force <- FALSE
+# with_progress({
+#   p <- progressor(steps = length(pls2))
+
+  passed <- purrr::map(pls,
+              \(pl){
+                # p()
+                # cli::cli_alert_info("working on {ct}")
+                nfile_name <- paste0(pl, "_1kbins_lineup")
+                fst_file <-
+                  new_dir |>
+                  fs::path(nfile_name, ext = "fst")
+
+                tryCatch(
+                  expr = {
+                    if (any(!fs::file_exists(fst_file)) || force == TRUE) {
+                      dt <- pipapi::pip(povline = pl,
+                                        lkup = lkup,
+                                        fill_gaps = TRUE,
+                                        year = years) |>
+                        fselect(cols)
+
+                      lt <- split(dt, by = "poverty_line")
+
+                      lapply(seq_along(lt), \(x) {
+                        fst::write_fst(lt[[x]], fst_file[[x]])
+                      })
+                    }
+                    TRUE
+                  }, # end of expr section
+
+                  error = function(e) {
+                    FALSE
+                  }, # end of error section
+
+                  warning = function(w) {
+                    FALSE
+                  } # end of finally section
+
+                ) # End of trycatch
+              },
+              .progress = TRUE
+              # .options = furrr_options(seed = TRUE)
+  ) # end of map
+
+
+if (require(pushoverr)) {
+  pushoverr::pushover("Done with 1kbins")
+}
+
+# plan(sequential)
+toc <- tictoc::toc()
+(toc$toc - toc$tic)/60
+
+which(passed == FALSE)
+
+### convert o Stata format ---------
 
 tictoc::tic()
 
@@ -183,13 +190,13 @@ fst_files <- new_dir |>
                            columns  = cols,
                            as.data.table = TRUE)
 
-        dta_file <- x |>
-          fs::path_ext_remove() |>
-          fs::path(ext = "dta")
-
-        if (force == TRUE || !fs::file_exists(dta_file)) {
-          haven::write_dta(y, dta_file)
-        }
+        # dta_file <- x |>
+        #   fs::path_ext_remove() |>
+        #   fs::path(ext = "dta")
+        #
+        # if (force == TRUE || !fs::file_exists(dta_file)) {
+        #   haven::write_dta(y, dta_file)
+        # }
         y
 
       }, # end of expr section
