@@ -22,7 +22,7 @@ cache_inv[, (id_vars) := tstrsplit(cache_id, split = "_", fill = TRUE)
           ][, welfare_type := fifelse(welfare_type == "CON", "consumption", "income")]
 
 # To remove.
-# cache_inv <- cache_inv[grep("SYNTH", cache_id)]
+# cache_inv <- cache_inv[grep("^IND", cache_id)]
 # cache_inv <- cache_inv[grep("ALB.*2005", cache_id)]
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
