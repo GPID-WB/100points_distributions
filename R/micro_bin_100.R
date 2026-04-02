@@ -1,4 +1,3 @@
-
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Run initial conditions   ---------
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -6,10 +5,12 @@ source("R/init.R")
 
 
 cache_inv <- pipload::pip_find_cache(version = version) |>
-  {\(.) .[!grepl("GROUP", .)]}() |>
+  {
+    \(.) .[!grepl("GROUP", .)]
+  }() |>
   data.table(cache_id = _)
 
-id_vars <-  c(
+id_vars <- c(
   "country_code",
   "surveyid_year",
   "survey_acronym",
@@ -18,8 +19,9 @@ id_vars <-  c(
   "source"
 )
 
-cache_inv[, (id_vars) := tstrsplit(cache_id, split = "_", fill = TRUE)
-          ][, welfare_type := fifelse(welfare_type == "CON", "consumption", "income")]
+cache_inv[, (id_vars) := tstrsplit(cache_id, split = "_", fill = TRUE)][,
+  welfare_type := fifelse(welfare_type == "CON", "consumption", "income")
+]
 
 # To remove.
 # cache_inv <- cache_inv[grep("^IND", cache_id)]
@@ -30,32 +32,31 @@ cache_inv[, (id_vars) := tstrsplit(cache_id, split = "_", fill = TRUE)
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 pfw <- pipload::pip_load_aux("pfw")
-
-fpf <- joyn::joyn(cache_inv, pfw,
-                  by = c("country_code", "surveyid_year", "survey_acronym", "welfare_type"),
-                  keep = 'left',
-                  reportvar = FALSE) |>
-  fselect(country_code,
-          surveyid_year,
-          reporting_year,
-          welfare_type)
+pop <- pipload::pip_load_aux("pop")
+pop[, pop := pop / nq]
 
 
-fpf[is.na(reporting_year),
-    reporting_year := as.double(surveyid_year)
-    ][, `:=`(
+fpf <- joyn::joyn(
+  cache_inv,
+  pfw,
+  by = c("country_code", "surveyid_year", "survey_acronym", "welfare_type"),
+  keep = 'left',
+  reportvar = FALSE
+) |>
+  fselect(country_code, surveyid_year, reporting_year, welfare_type)
+
+
+fpf[is.na(reporting_year), reporting_year := as.double(surveyid_year)][, `:=`(
   id = paste(country_code, reporting_year, welfare_type, sep = "_"),
   version = version,
-  wt_call = toupper(substr(welfare_type, 1, 3)))
-  ]
-
+  wt_call = toupper(substr(welfare_type, 1, 3))
+)]
 
 
 # Testing: here we have to include some code that allows the use to select
 # different countries, years, etc.
 # st <- sample(nrow(fpf), size = 3, replace =FALSE)
 # fpf <- fpf[st]
-
 
 # fpf <- fpf[country_code %in% c("CHN", "ARG", "AGO")]
 # fpf <- fpf[country_code %in% c("AGO")]
@@ -65,11 +66,8 @@ fpf[is.na(reporting_year),
 fpf <- fpf |>
   split(by = "id")
 
-poss_get_micro_dist <- purrr::possibly(.f = get_micro_dist,
-                                     otherwise = NULL)
-dr <- purrr::map(.x = fpf,
-                 .f = poss_get_micro_dist,
-                 .progress = TRUE)
+poss_get_micro_dist <- purrr::possibly(.f = get_micro_dist, otherwise = NULL)
+dr <- purrr::map(.x = fpf, .f = poss_get_micro_dist, .progress = TRUE)
 
 names(dr) <- names(fpf)
 
@@ -86,7 +84,11 @@ dr_err
 
 dr <-
   dr |>
-  purrr::keep(.p = ~{!is.null(.x)})
+  purrr::keep(
+    .p = ~ {
+      !is.null(.x)
+    }
+  )
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # format and save data   ---------
@@ -94,10 +96,8 @@ dr <-
 
 iwalk(dr, \(x, idx) fmt_sve(x, idx))
 
-
 # WQelfare share OK?
 
 # was_ok <- lapply(dr, attr, "welfare_share_OK")
-
 
 # rd <- rbindlist(rd, use.names = TRUE)
