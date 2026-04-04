@@ -32,7 +32,11 @@ cache_inv[, (id_vars) := tstrsplit(cache_id, split = "_", fill = TRUE)][,
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 pfw <- pipload::pip_load_aux("pfw")
-pop <- pipload::pip_load_aux("pop")
+pop <- "e:/PIP/pipapi_data/" |>
+  fs::path(version, "estimations/prod_svy_estimation.fst") |>
+  fst::read_fst(as.data.table = TRUE) |>
+  fselect(country_code, reporting_year, reporting_level, pop = reporting_pop)
+
 pop[, pop := pop / nq]
 
 

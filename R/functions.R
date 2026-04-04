@@ -119,11 +119,8 @@ get_micro_dist <- function(pl) {
   # filter population data
   popct <- pop[
     country_code == pl$country_code &
-      year == pl$surveyid_year
+      reporting_year == pl$reporting_year
   ]
-
-  setnames(popct, "pop_data_level", "reporting_level")
-  popct[, pop_domain := NULL]
 
   # adjust weights to number of imputations
 

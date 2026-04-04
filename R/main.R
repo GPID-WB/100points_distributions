@@ -64,7 +64,7 @@ if (require(pushoverr)) {
 
 # TESTING -------------------------
 ## !!! folders parameters: change to desired folder in pip
-version <- "20250401_2021_01_02_PROD"
+version <- "20260324_2021_01_02_PROD"
 
 album_dir <-
   fs::path("data/album", version)
@@ -142,3 +142,14 @@ wld |>
 # all_ok <- rowbind(dok)
 #
 # all_ok[ws_ok == FALSE]
+
+cty <- "TUR"
+yr <- 2023
+bin <- 100
+patt <- paste0(cty, "_", yr, ".*", bin, "bin")
+
+
+df <- fs::dir_ls(singles_dir, regexp = patt) |>
+  qs::qread()
+
+fsum(df$pop)
